@@ -1,0 +1,72 @@
+<Window x:Class="PowerPotion.Host.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PowerPotion — Live Renderer"
+        Width="1400" Height="860"
+        WindowStartupLocation="CenterScreen"
+        Background="#1E1E22"
+        UseLayoutRounding="True">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ================= Toolbar ================= -->
+        <Border Grid.Row="0" Background="#26262B" BorderBrush="#333338" BorderThickness="0,0,0,1" Padding="8,5">
+            <DockPanel>
+                <TextBlock DockPanel.Dock="Left" Text="⚡ PowerPotion" FontSize="15" FontWeight="Bold"
+                           Foreground="#7C4DFF" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                <TextBlock x:Name="DocLabel" DockPanel.Dock="Right" Foreground="#9E9EA6" FontSize="11"
+                           VerticalAlignment="Center" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" Text=""/>
+                <StackPanel Orientation="Horizontal">
+                    <Button x:Name="BtnLive" Content="⏸ Pause Updates" Click="OnToggleLive" Padding="10,4" Margin="0,0,6,0"/>
+                    <Button Content="📷 Screenshot" Click="OnScreenshot" Padding="10,4" Margin="0,0,6,0"/>
+                    <Button Content="🌐 Panorama" Click="OnPanorama" Padding="10,4" Margin="0,0,6,0"/>
+                    <Button x:Name="BtnSettings" Content="🎛 Visual Settings" Click="OnToggleSettings" Padding="10,4" Margin="0,0,6,0"/>
+                    <Button x:Name="BtnMaterials" Content="🎨 Materials" Click="OnToggleMaterials" Padding="10,4" Margin="0,0,6,0"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ================= Content ================= -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition x:Name="SidebarColumn" Width="0"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- renderer surface (native child HWND, added in code-behind) -->
+            <Grid x:Name="SurfaceHost" Grid.Column="0" Background="#101014"/>
+
+            <!-- sidebar -->
+            <Border x:Name="Sidebar" Grid.Column="1" Background="#222228" BorderBrush="#333338" BorderThickness="1,0,0,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="SidebarTitle" Grid.Row="0" Text="Visual Settings" FontSize="13" FontWeight="SemiBold"
+                               Foreground="#EAEAEA" Margin="12,10,12,8"/>
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel x:Name="SidebarContent" Margin="12,0,12,12"/>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ================= Status bar ================= -->
+        <Border Grid.Row="2" Background="#26262B" BorderBrush="#333338" BorderThickness="0,1,0,0" Padding="10,4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="StatusText" Grid.Column="0" Foreground="#9E9EA6" FontSize="11" Text="Starting…"/>
+                <TextBlock x:Name="EngineText" Grid.Column="2" Foreground="#6E6E76" FontSize="11" Text=""/>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -1,0 +1,87 @@
+# ---------------------------------------------------------------------------
+# PowerPotion — ignored build/runtime artifacts
+# ---------------------------------------------------------------------------
+
+# .NET build output
+[Bb]in/
+[Oo]bj/
+[Dd]ist/
+[Aa]rtifacts/
+*.dll
+*.exe
+*.pdb
+*.mdb
+*.cache
+*.tlog
+*.baml
+*.g.resources
+*.nuget.g.props
+*.nuget.g.targets
+*.dgspec.json
+*.nuget.cache
+*.assets.cache
+*.FileListAbsolute.txt
+*.Up2Date
+
+# Installer output (Inno Setup writes here; rebuilt by build.cmd)
+installer/Output/
+
+# NuGet
+packages/
+*.nupkg
+*.snupkg
+project.lock.json
+project.assets.json
+
+# Visual Studio / Rider
+.vs/
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.csproj.user
+*.DotSettings.user
+*.VC.db
+*.VC.VC.opendb
+*.sln.iml
+_ReSharper*/
+*.resharper*
+
+# Test / coverage output
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# Logs and crash dumps
+*.log
+*.tlog
+*.dump
+*.dmp
+*.stackdump
+crash-reports/
+logs/
+
+# OS cruft
+Thumbs.db
+ehthumbs.db
+desktop.ini
+.DS_Store
+$RECYCLE.BIN/
+
+# Local secrets / machine-specific settings
+*.local.json
+*.secrets.json
+.env
+.env.*
+!.env.example
+appsettings.Development.local.json
+
+# REA / reverse-engineering working files (evidence reports in docs/ are kept)
+*.rea
+.rea/

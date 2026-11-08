@@ -1,0 +1,60 @@
+<Window x:Class="PowerPotion.Revit.UI.MaterialEditorWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="PowerPotion — Material Editor"
+        Width="720" Height="560"
+        WindowStartupLocation="CenterScreen">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="240"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <ListBox x:Name="MaterialList" Grid.Row="0" Grid.Column="0"
+                 SelectionChanged="OnMaterialSelected"
+                 Margin="0,0,8,0"/>
+
+        <ScrollViewer Grid.Row="0" Grid.Column="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel x:Name="EditorPanel" Margin="4,0,0,0">
+                <TextBlock x:Name="MaterialName" FontSize="16" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                <TextBlock Text="Albedo color" FontWeight="SemiBold"/>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,8">
+                    <Slider x:Name="Red"   Width="200" Minimum="0" Maximum="1" ValueChanged="OnSliderChanged"/>
+                    <Slider x:Name="Green" Width="200" Minimum="0" Maximum="1" ValueChanged="OnSliderChanged" Margin="8,0,0,0"/>
+                    <Slider x:Name="Blue"  Width="200" Minimum="0" Maximum="1" ValueChanged="OnSliderChanged" Margin="8,0,0,0"/>
+                </StackPanel>
+
+                <TextBlock Text="Roughness" FontWeight="SemiBold"/>
+                <Slider x:Name="Roughness" Minimum="0" Maximum="1" Margin="0,4,0,8" ValueChanged="OnSliderChanged"/>
+
+                <TextBlock Text="Metallic" FontWeight="SemiBold"/>
+                <Slider x:Name="Metallic" Minimum="0" Maximum="1" Margin="0,4,0,8" ValueChanged="OnSliderChanged"/>
+
+                <TextBlock Text="Opacity" FontWeight="SemiBold"/>
+                <Slider x:Name="Opacity" Minimum="0.02" Maximum="1" Margin="0,4,0,8" ValueChanged="OnSliderChanged"/>
+
+                <TextBlock Text="Emissive strength" FontWeight="SemiBold"/>
+                <Slider x:Name="Emissive" Minimum="0" Maximum="5" Margin="0,4,0,8" ValueChanged="OnSliderChanged"/>
+
+                <TextBlock Text="Albedo texture" FontWeight="SemiBold"/>
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,4">
+                    <TextBox x:Name="TexturePath" Width="380" IsReadOnly="True"/>
+                    <Button Content="Browse…" Margin="8,0,0,0" Click="OnBrowseTexture"/>
+                </StackPanel>
+                <TextBlock x:Name="TextureHint" FontSize="11" Foreground="Gray"
+                           Text="Textures are read from the material's appearance asset."/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                    Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Write back to Revit material" Padding="12,6" Click="OnWriteBack"/>
+            <Button Content="Close" Padding="12,6" Margin="8,0,0,0" Click="OnClose"/>
+        </StackPanel>
+    </Grid>
+</Window>

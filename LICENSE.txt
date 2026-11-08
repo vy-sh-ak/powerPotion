@@ -1,0 +1,38 @@
+PowerPotion — Personalized Revit Real-Time Renderer
+Copyright (c) 2026
+
+PERSONAL/EDUCATIONAL USE LICENSE
+
+PowerPotion is a clean-room, personalized companion for Autodesk Revit that reuses the
+rendering engine of your separately installed Enscape product at runtime, through the
+managed API assembly that Enscape itself ships (Enscape.RendererApi.dll).
+
+1. What this software does
+   • Adds a "PowerPotion" ribbon tab to Revit 2026 with real-time rendering,
+     material editing, sun/location, sky/cloud/fog, quality and capture controls.
+   • Loads the native Enscape engine from your licensed Enscape installation and
+     embeds its render window in its own host process.
+   • Contains no VR, account, telemetry or license-activation functionality.
+
+2. What this software does NOT do
+   • It does not modify, patch, decode, redistribute or bypass any Chaos/Enscape
+     binary, protection or entitlement mechanism. Any license enforcement that the
+     Enscape engine performs internally remains fully in effect.
+   • It does not include any Chaos-owned code or assets.
+
+3. Requirements on your part
+   • A valid, separately obtained Enscape license. PowerPotion is a companion UI,
+     not a replacement for one. If your Enscape installation is unlicensed or its
+     trial has ended, the engine may refuse to render — by design.
+   • Autodesk Revit 2026, licensed separately.
+   • Use within the scope of the licenses you hold for Revit and Enscape.
+
+4. Warranty and liability
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+   OTHER LIABILITY ARISING FROM ITS USE.
+
+5. Trademarks
+   Enscape and Chaos are trademarks of Chaos Software Ltd. Autodesk and Revit are
+   trademarks of Autodesk, Inc. PowerPotion is not affiliated with, endorsed by or
+   sponsored by either company.

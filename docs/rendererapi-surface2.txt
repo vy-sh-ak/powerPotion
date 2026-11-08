@@ -1,0 +1,1908 @@
+=== Enscape.RendererApi.IEnscapeApiScope   ===
+    Boolean TryGetWorldApi(out IEnscapeWorldApi& worldApi)
+    Boolean TryGetBuildingPerformanceApi(out IEnscapeBuildingPerformanceApi& buildingPerformanceApi)
+    Boolean TryGetCameraApi(out IEnscapeCameraApi& cameraApi)
+    Boolean TryGetKeyboardInputApi(out IEnscapeKeyboardInputApi& keyboardInputApi)
+    Boolean TryGetCaptureApi(out IEnscapeCaptureApi& captureApi)
+    Boolean TryGetSceneApi(out IEnscapeSceneApi& sceneApi)
+    Boolean TryGetSectionPlanesApi(out IEnscapeSectionPlanesApi& sectionPlanesApi)
+    Boolean TryGetSelectionApi(out IEnscapeSelectionApi& selectionApi)
+    Boolean TryGetSunAndLocationApi(out IEnscapeSunAndLocationApi& sunAndLocationApi)
+    Boolean TryGetAnnotationApi(out IEnscapeAnnotationApi& annotationApi)
+    Boolean TryGetUtilitiesApi(out IEnscapeUtilitiesApi& utilitiesApi)
+    Boolean TryGetSettingsApi(out IEnscapeSettingsApi& settingsApi)
+    Boolean TryGetRpcApi(out IEnscapeRpcApi& rpcApi)
+    Boolean TryGetWindowApi(out IEnscapeWindowApi& windowApi)
+    Boolean TryGetVideoEditorApi(out IEnscapeVideoEditorApi& videoEditorApi)
+    Boolean TryGetHardwareApi(out IEnscapeHardwareApi& hardwareApi)
+    Boolean TryGetEntityGroupApi(out IEnscapeEntityGroupApi& entityGroupApi)
+    Boolean TryGetInteractionApi(out IEnscapeInteractionApi& interactionApi)
+    Boolean TryGetPlaceholderApi(out IEnscapePlaceholderApi& placeholderApi)
+    Boolean TryGetIntersectionQueryApi(out IEnscapeIntersectionQueryApi& intersectionQueryApi)
+    Boolean TryGetFootprintImageApi(out IEnscapeFootprintPathApi& footprintImageApi)
+    Boolean TryGetInputApi(out IEnscapeInputApi& inputApi)
+    Boolean TryGetHeadlessApi(out IEnscapeHeadlessApi& headlessApi)
+    Boolean TryGetStreamingApi(out IEnscapeStreamingApi& streamingApi)
+=== Enscape.RendererApi.IStartupParameters   ===
+    prop Boolean EnableRpc { get:True set:False }
+    prop List`1 PreInitCommands { get:True set:False }
+    prop Boolean SetWorkingDirectory { get:True set:False }
+    prop Boolean Standalone { get:True set:False }
+    prop Boolean StartWithHwrtEnabled { get:True set:False }
+    prop Boolean StartWithDlssEnabled { get:True set:False }
+=== Enscape.RendererApi.StartupParameters   ===
+    prop List`1 PreInitCommands { get:True set:True }
+    prop Boolean EnableRpc { get:True set:True }
+    prop Boolean Standalone { get:True set:True }
+    prop Boolean SetWorkingDirectory { get:True set:True }
+    prop Boolean StartWithHwrtEnabled { get:True set:False }
+    prop Boolean StartWithDlssEnabled { get:True set:False }
+=== MISSING Enscape.RendererApi.SlotSource ===
+=== MISSING Enscape.RendererApi.WcsType ===
+=== Enscape.RendererApi.BumpMapKind [enum] [struct] ===
+    UNDEFINED = 0
+    BUMP = 1
+    NORMAL = 2
+    DISPLACEMENT = 3
+=== Enscape.RendererApi.MaterialType [enum] [struct] ===
+    DEFAULT = 0
+    GRASS = 1
+    WATER = 2
+    FOLIAGE = 3
+    CLEARCOAT = 4
+    GLASS = 5
+=== MISSING Enscape.RendererApi.LightDistribution ===
+=== MISSING Enscape.RendererApi.LightShape ===
+=== MISSING Enscape.RendererApi.SunMode ===
+=== Enscape.RendererApi.ProjectLocation   ===
+    prop Double Latitude { get:True set:True }
+    prop Double Longitude { get:True set:True }
+    prop Double NorthAngle { get:True set:True }
+    prop Double TimeZone { get:True set:True }
+=== Enscape.RendererApi.ExplicitSunPosition   ===
+    vec3 ToSunVector(Double northAngleRadians)
+    prop Double Altitude { get:True set:True }
+    prop Double Azimuth { get:True set:True }
+=== Enscape.RendererApi.SceneParams  [struct] ===
+    field CameraParams Camera
+    field SceneTimeParams Time
+=== Enscape.RendererApi.SceneTimeParams  [struct] ===
+    field SunMode SunMode
+    field Int32 Day
+    field Int32 Month
+    field Int32 Year
+    field Single Hour
+    field Single DiffHoursToGMT
+    field Single Longitude
+    field Single Latitude
+    field Single SunX
+    field Single SunY
+    field Single SunZ
+=== MISSING Enscape.RendererApi.SoundSourceParams ===
+=== Enscape.RendererApi.BillboardType [enum] [struct] ===
+    NO_BILLBOARD = 0
+    NO_UV_ATLAS = 0
+    BILLBOARD = 1
+    UV_ATLAS = 2
+=== Enscape.RendererApi.FamilyClass [enum] [struct] ===
+    UNDEFINED = 0
+    DOOR = 1
+    WALL = 2
+    CEILING = 3
+    WINDOW = 4
+    PLANTING = 5
+    STAIRS = 6
+    RAILINGS = 7
+    CASEWORK = 8
+    LIGHTING_FIXTURES = 9
+    PLUMBING_FIXTURES = 10
+    CURTAIN_PANELS = 11
+    CURTAIN_WALL_MULLION = 12
+    CURTAIN_WALL_GRIDS = 13
+    CURTAIN_ROOF_GRIDS = 14
+    FURNITURE = 15
+    FURNITURE_SYSTEMS = 16
+    SPECIALTY_EQUIPMENT = 17
+    COLUMNS = 18
+    SITE = 19
+    ENTOURAGE = 20
+    EXTERNAL_MODEL = 21
+    SOUNDSOURCE = 22
+    ENSCAPE_CAMERA = 23
+    RPC = 24
+    RPC_FOLIAGE = 25
+    RPC_PEOPLE = 26
+    VIEW = 27
+    CAMERA = 28
+    MODEL_GROUPS = 29
+    REVIT_LINK = 30
+    SKATTER = 31
+=== Enscape.RendererApi.DataModel.ModelData   ===
+    Void Add(ModelData data)
+    Void Add(ModelData data, mat4 transform)
+    prop FamilyClass FamilyClass { get:True set:True }
+    prop BillboardType BillboardFlags { get:True set:True }
+    prop List`1 Vertices { get:True set:False }
+    prop List`1 Normals { get:True set:False }
+    prop List`1 Uvs { get:True set:True }
+    prop List`1 BacksideUvs { get:True set:True }
+    prop List`1 IndexCollectors { get:True set:False }
+    prop List`1 Decals { get:True set:False }
+    prop Int32 NumIndices { get:True set:True }
+=== Enscape.RendererApi.DataModel.IndexCollector   ===
+    IndexCollector Clone()
+    Void AddOffset(Int32 offset)
+    Void RevertFaceWindingOrder()
+    prop List`1 Indices { get:True set:False }
+    prop Int32 MaterialId { get:True set:True }
+    prop Int32 BacksideMaterialId { get:True set:True }
+    prop Nullable`1 LodStart { get:True set:True }
+    prop Nullable`1 LodEnd { get:True set:True }
+=== Enscape.RendererApi.DataModel.DecalData   ===
+=== Enscape.RendererApi.VertexDataType [enum] [struct] ===
+    UINT_32 = 0
+    UVEC4_16 = 1
+    VEC2_SFLOAT_32 = 2
+    VEC3_SFLOAT_32 = 3
+    VEC4_SFLOAT_32 = 4
+=== Enscape.RendererApi.VertexAttributeType [enum] [struct] ===
+    POSITION = 0
+    NORMAL = 1
+    UVS_FRONT = 2
+    UVS_BACK = 3
+    ANIM_VEGETATION_COLOR = 4
+    TANGENT = 5
+=== Enscape.RendererApi.PhysModelType [enum] [struct] ===
+    ORIGINAL_MODEL = 0
+    PHYS_MODEL = 1
+    NO_PHYS = 2
+    BOX = 3
+    SPHERE = 4
+=== Enscape.RendererApi.VertexAttributeBufferDescription  [struct] ===
+    field IntPtr VertexBuffer
+    field VertexDataType DataType
+    field VertexAttributeType AttributeType
+    field UInt64 NumberOfVertices
+=== Enscape.RendererApi.EnscapeWindowApi   ===
+    EnscapeResult GetRenderWindowHandle(ref IntPtr& hWnd)
+    EnscapeResult GetVersion(out String& version)
+    EnscapeResult GetVersionWithBuild(out String& version)
+    EnscapeResult SetConsoleEnabled(Boolean enableConsole)
+    EnscapeResult WaitForLoopModeIdle()
+=== Enscape.RendererApi.IEnscapeWindowApi   ===
+    EnscapeResult GetRenderWindowHandle(ref IntPtr& hWnd)
+    EnscapeResult GetVersion(out String& version)
+    EnscapeResult GetVersionWithBuild(out String& version)
+    EnscapeResult SetConsoleEnabled(Boolean enableConsole)
+    EnscapeResult WaitForLoopModeIdle()
+=== Enscape.RendererApi.StandaloneMode [enum] [struct] ===
+    CLOUD = 0
+    PLAIN = 1
+    SLIM = 2
+    WEB = 3
+=== MISSING Enscape.RendererApi.CallbackProcExt ===
+=== Enscape.RendererApi.EnscapeHeadlessApi   ===
+    EnscapeResult IsHeadlessModeEnabled(ref Boolean& isEnabled)
+    EnscapeResult StartHostMemoryScreenshotCapturing(LayeredHostMemory outputLayeredHostMemory, EnscapeCallbackProc onFinished)
+=== Enscape.RendererApi.IEnscapeHeadlessApi   ===
+    EnscapeResult IsHeadlessModeEnabled(ref Boolean& isEnabled)
+    EnscapeResult StartHostMemoryScreenshotCapturing(LayeredHostMemory memory, EnscapeCallbackProc onFinished)
+=== Enscape.RendererApi.EnscapeHardwareApi   ===
+    static EnscapeResult GetGpuInformation(IEnscapeApiNative api, out GpuInformation[]& gpuInformation, ref UInt32& primaryGpu, out String& log)
+    EnscapeResult GetGpuInformation(out GpuInformation[]& gpuInformation, ref UInt32& primaryGpu, out String& log)
+    static EnscapeResult GetDlssInformation(IEnscapeApiNative api, String deviceName, ref Boolean& isDlssAvailable, out String& log)
+    EnscapeResult GetDlssInformation(String deviceName, ref Boolean& isDlssAvailable, out String& log)
+    EnscapeResult GetSupportedGPUFeatureFlags(ref GpuFeatureFlags& gpuFeatureFlags)
+=== Enscape.RendererApi.IEnscapeHardwareApi   ===
+    EnscapeResult GetSupportedGPUFeatureFlags(ref GpuFeatureFlags& gpuFeatureFlags)
+    EnscapeResult GetGpuInformation(out GpuInformation[]& gpuInformation, ref UInt32& primaryGpu, out String& log)
+=== Enscape.RendererApi.GpuInformation  [struct] ===
+    field String Model
+    field String Vendor
+    field String DriverVersion
+    field String GpuType
+    field UInt64 VRamInBytes
+    field GpuFeatureFlags SupportedFeatureFlags
+    field QualityLevel DefaultQualityLevel
+    field RendererSettingFlags DefaultRendererSettingFlags
+=== Enscape.RendererApi.GpuFeatureFlags [enum] [struct] ===
+    NONE = 0
+    HARDWARE_RAYTRACING = 1
+    VR = 2
+=== GlmSharp.vec3  [struct] ===
+    field Single x
+    field Single y
+    field Single z
+    prop Single Item { get:True set:True }
+    prop swizzle_vec3 swizzle { get:True set:False }
+    prop vec2 xy { get:True set:True }
+    prop vec2 xz { get:True set:True }
+    prop vec2 yz { get:True set:True }
+    prop vec3 xyz { get:True set:True }
+    prop vec2 rg { get:True set:True }
+    prop vec2 rb { get:True set:True }
+    prop vec2 gb { get:True set:True }
+    prop vec3 rgb { get:True set:True }
+    prop Single r { get:True set:True }
+    prop Single g { get:True set:True }
+    prop Single b { get:True set:True }
+    prop Single[] Values { get:True set:False }
+    prop Int32 Count { get:True set:False }
+    prop Single MinElement { get:True set:False }
+    prop Single MaxElement { get:True set:False }
+    prop Single Length { get:True set:False }
+    prop Single LengthSqr { get:True set:False }
+    prop Single Sum { get:True set:False }
+    prop Single Norm { get:True set:False }
+    prop Single Norm1 { get:True set:False }
+    prop Single Norm2 { get:True set:False }
+    prop Single NormMax { get:True set:False }
+    prop vec3 Normalized { get:True set:False }
+    prop vec3 NormalizedSafe { get:True set:False }
+    prop vec3 Zero { get:True set:False }
+    prop vec3 Ones { get:True set:False }
+    prop vec3 UnitX { get:True set:False }
+    prop vec3 UnitY { get:True set:False }
+    prop vec3 UnitZ { get:True set:False }
+    prop vec3 MaxValue { get:True set:False }
+    prop vec3 MinValue { get:True set:False }
+    prop vec3 Epsilon { get:True set:False }
+    prop vec3 NaN { get:True set:False }
+    prop vec3 NegativeInfinity { get:True set:False }
+    prop vec3 PositiveInfinity { get:True set:False }
+    static dvec3 op_Implicit(vec3 v)
+    static cvec3 op_Implicit(vec3 v)
+    static ivec2 op_Explicit(vec3 v)
+    static ivec3 op_Explicit(vec3 v)
+    static ivec4 op_Explicit(vec3 v)
+    static uvec2 op_Explicit(vec3 v)
+    static uvec3 op_Explicit(vec3 v)
+    static uvec4 op_Explicit(vec3 v)
+    static vec2 op_Explicit(vec3 v)
+    static vec4 op_Explicit(vec3 v)
+    static hvec2 op_Explicit(vec3 v)
+    static hvec3 op_Explicit(vec3 v)
+    static hvec4 op_Explicit(vec3 v)
+    static dvec2 op_Explicit(vec3 v)
+    static dvec4 op_Explicit(vec3 v)
+    static decvec2 op_Explicit(vec3 v)
+    static decvec3 op_Explicit(vec3 v)
+    static decvec4 op_Explicit(vec3 v)
+    static cvec2 op_Explicit(vec3 v)
+    static cvec4 op_Explicit(vec3 v)
+    static lvec2 op_Explicit(vec3 v)
+    static lvec3 op_Explicit(vec3 v)
+    static lvec4 op_Explicit(vec3 v)
+    static bvec2 op_Explicit(vec3 v)
+    static bvec3 op_Explicit(vec3 v)
+    static bvec4 op_Explicit(vec3 v)
+    static Single[] op_Explicit(vec3 v)
+    static Object[] op_Explicit(vec3 v)
+    static vec3 get_Zero()
+    static vec3 get_Ones()
+    static vec3 get_UnitX()
+    static vec3 get_UnitY()
+    static vec3 get_UnitZ()
+    static vec3 get_MaxValue()
+    static vec3 get_MinValue()
+    static vec3 get_Epsilon()
+    static vec3 get_NaN()
+    static vec3 get_NegativeInfinity()
+    static vec3 get_PositiveInfinity()
+    static Boolean op_Equality(vec3 lhs, vec3 rhs)
+    static Boolean op_Inequality(vec3 lhs, vec3 rhs)
+    static vec3 Parse(String s)
+    static vec3 Parse(String s, String sep)
+    static vec3 Parse(String s, String sep, IFormatProvider provider)
+    static vec3 Parse(String s, String sep, NumberStyles style)
+    static vec3 Parse(String s, String sep, NumberStyles style, IFormatProvider provider)
+    static Boolean TryParse(String s, ref vec3& result)
+    static Boolean TryParse(String s, String sep, ref vec3& result)
+    static Boolean TryParse(String s, String sep, NumberStyles style, IFormatProvider provider, ref vec3& result)
+    static Boolean ApproxEqual(vec3 lhs, vec3 rhs, Single eps)
+    static mat3x2 OuterProduct(vec2 c, vec3 r)
+    static mat2x3 OuterProduct(vec3 c, vec2 r)
+    static mat3 OuterProduct(vec3 c, vec3 r)
+    static mat3x4 OuterProduct(vec4 c, vec3 r)
+    static mat4x3 OuterProduct(vec3 c, vec4 r)
+    static Single Dot(vec3 lhs, vec3 rhs)
+    static Single Distance(vec3 lhs, vec3 rhs)
+    static Single DistanceSqr(vec3 lhs, vec3 rhs)
+    static vec3 Reflect(vec3 I, vec3 N)
+    static vec3 Refract(vec3 I, vec3 N, Single eta)
+    static vec3 FaceForward(vec3 N, vec3 I, vec3 Nref)
+    static vec3 Cross(vec3 l, vec3 r)
+    static vec3 Random(Random random)
+    static vec3 RandomSigned(Random random)
+    static vec3 RandomNormal(Random random)
+    static bvec3 Equal(vec3 lhs, vec3 rhs)
+    static bvec3 Equal(vec3 lhs, Single rhs)
+    static bvec3 Equal(Single lhs, vec3 rhs)
+    static bvec3 Equal(Single lhs, Single rhs)
+    static bvec3 NotEqual(vec3 lhs, vec3 rhs)
+    static bvec3 NotEqual(vec3 lhs, Single rhs)
+    static bvec3 NotEqual(Single lhs, vec3 rhs)
+    static bvec3 NotEqual(Single lhs, Single rhs)
+    static bvec3 GreaterThan(vec3 lhs, vec3 rhs)
+    static bvec3 GreaterThan(vec3 lhs, Single rhs)
+    static bvec3 GreaterThan(Single lhs, vec3 rhs)
+    static bvec3 GreaterThan(Single lhs, Single rhs)
+    static bvec3 GreaterThanEqual(vec3 lhs, vec3 rhs)
+    static bvec3 GreaterThanEqual(vec3 lhs, Single rhs)
+    static bvec3 GreaterThanEqual(Single lhs, vec3 rhs)
+    static bvec3 GreaterThanEqual(Single lhs, Single rhs)
+    static bvec3 LesserThan(vec3 lhs, vec3 rhs)
+    static bvec3 LesserThan(vec3 lhs, Single rhs)
+    static bvec3 LesserThan(Single lhs, vec3 rhs)
+    static bvec3 LesserThan(Single lhs, Single rhs)
+    static bvec3 LesserThanEqual(vec3 lhs, vec3 rhs)
+    static bvec3 LesserThanEqual(vec3 lhs, Single rhs)
+    static bvec3 LesserThanEqual(Single lhs, vec3 rhs)
+    static bvec3 LesserThanEqual(Single lhs, Single rhs)
+    static bvec3 IsInfinity(vec3 v)
+    static bvec3 IsInfinity(Single v)
+    static bvec3 IsFinite(vec3 v)
+    static bvec3 IsFinite(Single v)
+    static bvec3 IsNaN(vec3 v)
+    static bvec3 IsNaN(Single v)
+    static bvec3 IsNegativeInfinity(vec3 v)
+    static bvec3 IsNegativeInfinity(Single v)
+    static bvec3 IsPositiveInfinity(vec3 v)
+    static bvec3 IsPositiveInfinity(Single v)
+    static vec3 Abs(vec3 v)
+    static vec3 Abs(Single v)
+    static vec3 HermiteInterpolationOrder3(vec3 v)
+    static vec3 HermiteInterpolationOrder3(Single v)
+    static vec3 HermiteInterpolationOrder5(vec3 v)
+    static vec3 HermiteInterpolationOrder5(Single v)
+    static vec3 Sqr(vec3 v)
+    static vec3 Sqr(Single v)
+    static vec3 Pow2(vec3 v)
+    static vec3 Pow2(Single v)
+    static vec3 Pow3(vec3 v)
+    static vec3 Pow3(Single v)
+    static vec3 Step(vec3 v)
+    static vec3 Step(Single v)
+    static vec3 Sqrt(vec3 v)
+    static vec3 Sqrt(Single v)
+    static vec3 InverseSqrt(vec3 v)
+    static vec3 InverseSqrt(Single v)
+    static ivec3 Sign(vec3 v)
+    static ivec3 Sign(Single v)
+    static vec3 Max(vec3 lhs, vec3 rhs)
+    static vec3 Max(vec3 lhs, Single rhs)
+    static vec3 Max(Single lhs, vec3 rhs)
+    static vec3 Max(Single lhs, Single rhs)
+    static vec3 Min(vec3 lhs, vec3 rhs)
+    static vec3 Min(vec3 lhs, Single rhs)
+    static vec3 Min(Single lhs, vec3 rhs)
+    static vec3 Min(Single lhs, Single rhs)
+    static vec3 Pow(vec3 lhs, vec3 rhs)
+    static vec3 Pow(vec3 lhs, Single rhs)
+    static vec3 Pow(Single lhs, vec3 rhs)
+    static vec3 Pow(Single lhs, Single rhs)
+    static vec3 Log(vec3 lhs, vec3 rhs)
+    static vec3 Log(vec3 lhs, Single rhs)
+    static vec3 Log(Single lhs, vec3 rhs)
+    static vec3 Log(Single lhs, Single rhs)
+    static vec3 Clamp(vec3 v, vec3 min, vec3 max)
+    static vec3 Clamp(vec3 v, vec3 min, Single max)
+    static vec3 Clamp(vec3 v, Single min, vec3 max)
+    static vec3 Clamp(vec3 v, Single min, Single max)
+    static vec3 Clamp(Single v, vec3 min, vec3 max)
+    static vec3 Clamp(Single v, vec3 min, Single max)
+    static vec3 Clamp(Single v, Single min, vec3 max)
+    static vec3 Clamp(Single v, Single min, Single max)
+    static vec3 Mix(vec3 min, vec3 max, vec3 a)
+    static vec3 Mix(vec3 min, vec3 max, Single a)
+    static vec3 Mix(vec3 min, Single max, vec3 a)
+    static vec3 Mix(vec3 min, Single max, Single a)
+    static vec3 Mix(Single min, vec3 max, vec3 a)
+    static vec3 Mix(Single min, vec3 max, Single a)
+    static vec3 Mix(Single min, Single max, vec3 a)
+    static vec3 Mix(Single min, Single max, Single a)
+    static vec3 Lerp(vec3 min, vec3 max, vec3 a)
+    static vec3 Lerp(vec3 min, vec3 max, Single a)
+    static vec3 Lerp(vec3 min, Single max, vec3 a)
+    static vec3 Lerp(vec3 min, Single max, Single a)
+    static vec3 Lerp(Single min, vec3 max, vec3 a)
+    static vec3 Lerp(Single min, vec3 max, Single a)
+    static vec3 Lerp(Single min, Single max, vec3 a)
+    static vec3 Lerp(Single min, Single max, Single a)
+    static vec3 Smoothstep(vec3 edge0, vec3 edge1, vec3 v)
+    static vec3 Smoothstep(vec3 edge0, vec3 edge1, Single v)
+    static vec3 Smoothstep(vec3 edge0, Single edge1, vec3 v)
+    static vec3 Smoothstep(vec3 edge0, Single edge1, Single v)
+    static vec3 Smoothstep(Single edge0, vec3 edge1, vec3 v)
+    static vec3 Smoothstep(Single edge0, vec3 edge1, Single v)
+    static vec3 Smoothstep(Single edge0, Single edge1, vec3 v)
+    static vec3 Smoothstep(Single edge0, Single edge1, Single v)
+    static vec3 Smootherstep(vec3 edge0, vec3 edge1, vec3 v)
+    static vec3 Smootherstep(vec3 edge0, vec3 edge1, Single v)
+    static vec3 Smootherstep(vec3 edge0, Single edge1, vec3 v)
+    static vec3 Smootherstep(vec3 edge0, Single edge1, Single v)
+    static vec3 Smootherstep(Single edge0, vec3 edge1, vec3 v)
+    static vec3 Smootherstep(Single edge0, vec3 edge1, Single v)
+    static vec3 Smootherstep(Single edge0, Single edge1, vec3 v)
+    static vec3 Smootherstep(Single edge0, Single edge1, Single v)
+    static vec3 Fma(vec3 a, vec3 b, vec3 c)
+    static vec3 Fma(vec3 a, vec3 b, Single c)
+    static vec3 Fma(vec3 a, Single b, vec3 c)
+    static vec3 Fma(vec3 a, Single b, Single c)
+    static vec3 Fma(Single a, vec3 b, vec3 c)
+    static vec3 Fma(Single a, vec3 b, Single c)
+    static vec3 Fma(Single a, Single b, vec3 c)
+    static vec3 Fma(Single a, Single b, Single c)
+    static vec3 Add(vec3 lhs, vec3 rhs)
+    static vec3 Add(vec3 lhs, Single rhs)
+    static vec3 Add(Single lhs, vec3 rhs)
+    static vec3 Add(Single lhs, Single rhs)
+    static vec3 Sub(vec3 lhs, vec3 rhs)
+    static vec3 Sub(vec3 lhs, Single rhs)
+    static vec3 Sub(Single lhs, vec3 rhs)
+    static vec3 Sub(Single lhs, Single rhs)
+    static vec3 Mul(vec3 lhs, vec3 rhs)
+    static vec3 Mul(vec3 lhs, Single rhs)
+    static vec3 Mul(Single lhs, vec3 rhs)
+    static vec3 Mul(Single lhs, Single rhs)
+    static vec3 Div(vec3 lhs, vec3 rhs)
+    static vec3 Div(vec3 lhs, Single rhs)
+    static vec3 Div(Single lhs, vec3 rhs)
+    static vec3 Div(Single lhs, Single rhs)
+    static vec3 Modulo(vec3 lhs, vec3 rhs)
+    static vec3 Modulo(vec3 lhs, Single rhs)
+    static vec3 Modulo(Single lhs, vec3 rhs)
+    static vec3 Modulo(Single lhs, Single rhs)
+    static vec3 Degrees(vec3 v)
+    static vec3 Degrees(Single v)
+    static vec3 Radians(vec3 v)
+    static vec3 Radians(Single v)
+    static vec3 Acos(vec3 v)
+    static vec3 Acos(Single v)
+    static vec3 Asin(vec3 v)
+    static vec3 Asin(Single v)
+    static vec3 Atan(vec3 v)
+    static vec3 Atan(Single v)
+    static vec3 Cos(vec3 v)
+    static vec3 Cos(Single v)
+    static vec3 Cosh(vec3 v)
+    static vec3 Cosh(Single v)
+    static vec3 Exp(vec3 v)
+    static vec3 Exp(Single v)
+    static vec3 Log(vec3 v)
+    static vec3 Log(Single v)
+    static vec3 Log2(vec3 v)
+    static vec3 Log2(Single v)
+    static vec3 Log10(vec3 v)
+    static vec3 Log10(Single v)
+    static vec3 Floor(vec3 v)
+    static vec3 Floor(Single v)
+    static vec3 Ceiling(vec3 v)
+    static vec3 Ceiling(Single v)
+    static vec3 Round(vec3 v)
+    static vec3 Round(Single v)
+    static vec3 Sin(vec3 v)
+    static vec3 Sin(Single v)
+    static vec3 Sinh(vec3 v)
+    static vec3 Sinh(Single v)
+    static vec3 Tan(vec3 v)
+    static vec3 Tan(Single v)
+    static vec3 Tanh(vec3 v)
+    static vec3 Tanh(Single v)
+    static vec3 Truncate(vec3 v)
+    static vec3 Truncate(Single v)
+    static vec3 Fract(vec3 v)
+    static vec3 Fract(Single v)
+    static vec3 Trunc(vec3 v)
+    static vec3 Trunc(Single v)
+    static vec3 Random(Random random, vec3 minValue, vec3 maxValue)
+    static vec3 Random(Random random, vec3 minValue, Single maxValue)
+    static vec3 Random(Random random, Single minValue, vec3 maxValue)
+    static vec3 Random(Random random, Single minValue, Single maxValue)
+    static vec3 RandomUniform(Random random, vec3 minValue, vec3 maxValue)
+    static vec3 RandomUniform(Random random, vec3 minValue, Single maxValue)
+    static vec3 RandomUniform(Random random, Single minValue, vec3 maxValue)
+    static vec3 RandomUniform(Random random, Single minValue, Single maxValue)
+    static vec3 RandomNormal(Random random, vec3 mean, vec3 variance)
+    static vec3 RandomNormal(Random random, vec3 mean, Single variance)
+    static vec3 RandomNormal(Random random, Single mean, vec3 variance)
+    static vec3 RandomNormal(Random random, Single mean, Single variance)
+    static vec3 RandomGaussian(Random random, vec3 mean, vec3 variance)
+    static vec3 RandomGaussian(Random random, vec3 mean, Single variance)
+    static vec3 RandomGaussian(Random random, Single mean, vec3 variance)
+    static vec3 RandomGaussian(Random random, Single mean, Single variance)
+    static bvec3 op_LessThan(vec3 lhs, vec3 rhs)
+    static bvec3 op_LessThan(vec3 lhs, Single rhs)
+    static bvec3 op_LessThan(Single lhs, vec3 rhs)
+    static bvec3 op_LessThanOrEqual(vec3 lhs, vec3 rhs)
+    static bvec3 op_LessThanOrEqual(vec3 lhs, Single rhs)
+    static bvec3 op_LessThanOrEqual(Single lhs, vec3 rhs)
+    static bvec3 op_GreaterThan(vec3 lhs, vec3 rhs)
+    static bvec3 op_GreaterThan(vec3 lhs, Single rhs)
+    static bvec3 op_GreaterThan(Single lhs, vec3 rhs)
+    static bvec3 op_GreaterThanOrEqual(vec3 lhs, vec3 rhs)
+    static bvec3 op_GreaterThanOrEqual(vec3 lhs, Single rhs)
+    static bvec3 op_GreaterThanOrEqual(Single lhs, vec3 rhs)
+    static vec3 op_Addition(vec3 lhs, vec3 rhs)
+    static vec3 op_Addition(vec3 lhs, Single rhs)
+    static vec3 op_Addition(Single lhs, vec3 rhs)
+    static vec3 op_Subtraction(vec3 lhs, vec3 rhs)
+    static vec3 op_Subtraction(vec3 lhs, Single rhs)
+    static vec3 op_Subtraction(Single lhs, vec3 rhs)
+    static vec3 op_Multiply(vec3 lhs, vec3 rhs)
+    static vec3 op_Multiply(vec3 lhs, Single rhs)
+    static vec3 op_Multiply(Single lhs, vec3 rhs)
+    static vec3 op_Division(vec3 lhs, vec3 rhs)
+    static vec3 op_Division(vec3 lhs, Single rhs)
+    static vec3 op_Division(Single lhs, vec3 rhs)
+    static vec3 op_UnaryPlus(vec3 v)
+    static vec3 op_UnaryNegation(vec3 v)
+    static vec3 op_Modulus(vec3 lhs, vec3 rhs)
+    static vec3 op_Modulus(vec3 lhs, Single rhs)
+    static vec3 op_Modulus(Single lhs, vec3 rhs)
+    ctor(Single x, Single y, Single z)
+    ctor(Single v)
+    ctor(vec2 v)
+    ctor(vec2 v, Single z)
+    ctor(vec3 v)
+    ctor(vec4 v)
+    ctor(IReadOnlyList`1 v)
+    ctor(Object[] v)
+    ctor(Single[] v)
+    ctor(Single[] v, Int32 startIndex)
+    ctor(IEnumerable`1 v)
+=== GlmSharp.vec4  [struct] ===
+    field Single x
+    field Single y
+    field Single z
+    field Single w
+    prop Single Item { get:True set:True }
+    prop swizzle_vec4 swizzle { get:True set:False }
+    prop vec2 xy { get:True set:True }
+    prop vec2 xz { get:True set:True }
+    prop vec2 yz { get:True set:True }
+    prop vec3 xyz { get:True set:True }
+    prop vec2 xw { get:True set:True }
+    prop vec2 yw { get:True set:True }
+    prop vec3 xyw { get:True set:True }
+    prop vec2 zw { get:True set:True }
+    prop vec3 xzw { get:True set:True }
+    prop vec3 yzw { get:True set:True }
+    prop vec4 xyzw { get:True set:True }
+    prop vec2 rg { get:True set:True }
+    prop vec2 rb { get:True set:True }
+    prop vec2 gb { get:True set:True }
+    prop vec3 rgb { get:True set:True }
+    prop vec2 ra { get:True set:True }
+    prop vec2 ga { get:True set:True }
+    prop vec3 rga { get:True set:True }
+    prop vec2 ba { get:True set:True }
+    prop vec3 rba { get:True set:True }
+    prop vec3 gba { get:True set:True }
+    prop vec4 rgba { get:True set:True }
+    prop Single r { get:True set:True }
+    prop Single g { get:True set:True }
+    prop Single b { get:True set:True }
+    prop Single a { get:True set:True }
+    prop Single[] Values { get:True set:False }
+    prop Int32 Count { get:True set:False }
+    prop Single MinElement { get:True set:False }
+    prop Single MaxElement { get:True set:False }
+    prop Single Length { get:True set:False }
+    prop Single LengthSqr { get:True set:False }
+    prop Single Sum { get:True set:False }
+    prop Single Norm { get:True set:False }
+    prop Single Norm1 { get:True set:False }
+    prop Single Norm2 { get:True set:False }
+    prop Single NormMax { get:True set:False }
+    prop vec4 Normalized { get:True set:False }
+    prop vec4 NormalizedSafe { get:True set:False }
+    prop vec4 Zero { get:True set:False }
+    prop vec4 Ones { get:True set:False }
+    prop vec4 UnitX { get:True set:False }
+    prop vec4 UnitY { get:True set:False }
+    prop vec4 UnitZ { get:True set:False }
+    prop vec4 UnitW { get:True set:False }
+    prop vec4 MaxValue { get:True set:False }
+    prop vec4 MinValue { get:True set:False }
+    prop vec4 Epsilon { get:True set:False }
+    prop vec4 NaN { get:True set:False }
+    prop vec4 NegativeInfinity { get:True set:False }
+    prop vec4 PositiveInfinity { get:True set:False }
+    static dvec4 op_Implicit(vec4 v)
+    static cvec4 op_Implicit(vec4 v)
+    static ivec2 op_Explicit(vec4 v)
+    static ivec3 op_Explicit(vec4 v)
+    static ivec4 op_Explicit(vec4 v)
+    static uvec2 op_Explicit(vec4 v)
+    static uvec3 op_Explicit(vec4 v)
+    static uvec4 op_Explicit(vec4 v)
+    static vec2 op_Explicit(vec4 v)
+    static vec3 op_Explicit(vec4 v)
+    static hvec2 op_Explicit(vec4 v)
+    static hvec3 op_Explicit(vec4 v)
+    static hvec4 op_Explicit(vec4 v)
+    static dvec2 op_Explicit(vec4 v)
+    static dvec3 op_Explicit(vec4 v)
+    static decvec2 op_Explicit(vec4 v)
+    static decvec3 op_Explicit(vec4 v)
+    static decvec4 op_Explicit(vec4 v)
+    static cvec2 op_Explicit(vec4 v)
+    static cvec3 op_Explicit(vec4 v)
+    static lvec2 op_Explicit(vec4 v)
+    static lvec3 op_Explicit(vec4 v)
+    static lvec4 op_Explicit(vec4 v)
+    static bvec2 op_Explicit(vec4 v)
+    static bvec3 op_Explicit(vec4 v)
+    static bvec4 op_Explicit(vec4 v)
+    static Single[] op_Explicit(vec4 v)
+    static Object[] op_Explicit(vec4 v)
+    static vec4 get_Zero()
+    static vec4 get_Ones()
+    static vec4 get_UnitX()
+    static vec4 get_UnitY()
+    static vec4 get_UnitZ()
+    static vec4 get_UnitW()
+    static vec4 get_MaxValue()
+    static vec4 get_MinValue()
+    static vec4 get_Epsilon()
+    static vec4 get_NaN()
+    static vec4 get_NegativeInfinity()
+    static vec4 get_PositiveInfinity()
+    static Boolean op_Equality(vec4 lhs, vec4 rhs)
+    static Boolean op_Inequality(vec4 lhs, vec4 rhs)
+    static vec4 Parse(String s)
+    static vec4 Parse(String s, String sep)
+    static vec4 Parse(String s, String sep, IFormatProvider provider)
+    static vec4 Parse(String s, String sep, NumberStyles style)
+    static vec4 Parse(String s, String sep, NumberStyles style, IFormatProvider provider)
+    static Boolean TryParse(String s, ref vec4& result)
+    static Boolean TryParse(String s, String sep, ref vec4& result)
+    static Boolean TryParse(String s, String sep, NumberStyles style, IFormatProvider provider, ref vec4& result)
+    static Boolean ApproxEqual(vec4 lhs, vec4 rhs, Single eps)
+    static mat4x2 OuterProduct(vec2 c, vec4 r)
+    static mat2x4 OuterProduct(vec4 c, vec2 r)
+    static mat4x3 OuterProduct(vec3 c, vec4 r)
+    static mat3x4 OuterProduct(vec4 c, vec3 r)
+    static mat4 OuterProduct(vec4 c, vec4 r)
+    static Single Dot(vec4 lhs, vec4 rhs)
+    static Single Distance(vec4 lhs, vec4 rhs)
+    static Single DistanceSqr(vec4 lhs, vec4 rhs)
+    static vec4 Reflect(vec4 I, vec4 N)
+    static vec4 Refract(vec4 I, vec4 N, Single eta)
+    static vec4 FaceForward(vec4 N, vec4 I, vec4 Nref)
+    static vec4 Random(Random random)
+    static vec4 RandomSigned(Random random)
+    static vec4 RandomNormal(Random random)
+    static bvec4 Equal(vec4 lhs, vec4 rhs)
+    static bvec4 Equal(vec4 lhs, Single rhs)
+    static bvec4 Equal(Single lhs, vec4 rhs)
+    static bvec4 Equal(Single lhs, Single rhs)
+    static bvec4 NotEqual(vec4 lhs, vec4 rhs)
+    static bvec4 NotEqual(vec4 lhs, Single rhs)
+    static bvec4 NotEqual(Single lhs, vec4 rhs)
+    static bvec4 NotEqual(Single lhs, Single rhs)
+    static bvec4 GreaterThan(vec4 lhs, vec4 rhs)
+    static bvec4 GreaterThan(vec4 lhs, Single rhs)
+    static bvec4 GreaterThan(Single lhs, vec4 rhs)
+    static bvec4 GreaterThan(Single lhs, Single rhs)
+    static bvec4 GreaterThanEqual(vec4 lhs, vec4 rhs)
+    static bvec4 GreaterThanEqual(vec4 lhs, Single rhs)
+    static bvec4 GreaterThanEqual(Single lhs, vec4 rhs)
+    static bvec4 GreaterThanEqual(Single lhs, Single rhs)
+    static bvec4 LesserThan(vec4 lhs, vec4 rhs)
+    static bvec4 LesserThan(vec4 lhs, Single rhs)
+    static bvec4 LesserThan(Single lhs, vec4 rhs)
+    static bvec4 LesserThan(Single lhs, Single rhs)
+    static bvec4 LesserThanEqual(vec4 lhs, vec4 rhs)
+    static bvec4 LesserThanEqual(vec4 lhs, Single rhs)
+    static bvec4 LesserThanEqual(Single lhs, vec4 rhs)
+    static bvec4 LesserThanEqual(Single lhs, Single rhs)
+    static bvec4 IsInfinity(vec4 v)
+    static bvec4 IsInfinity(Single v)
+    static bvec4 IsFinite(vec4 v)
+    static bvec4 IsFinite(Single v)
+    static bvec4 IsNaN(vec4 v)
+    static bvec4 IsNaN(Single v)
+    static bvec4 IsNegativeInfinity(vec4 v)
+    static bvec4 IsNegativeInfinity(Single v)
+    static bvec4 IsPositiveInfinity(vec4 v)
+    static bvec4 IsPositiveInfinity(Single v)
+    static vec4 Abs(vec4 v)
+    static vec4 Abs(Single v)
+    static vec4 HermiteInterpolationOrder3(vec4 v)
+    static vec4 HermiteInterpolationOrder3(Single v)
+    static vec4 HermiteInterpolationOrder5(vec4 v)
+    static vec4 HermiteInterpolationOrder5(Single v)
+    static vec4 Sqr(vec4 v)
+    static vec4 Sqr(Single v)
+    static vec4 Pow2(vec4 v)
+    static vec4 Pow2(Single v)
+    static vec4 Pow3(vec4 v)
+    static vec4 Pow3(Single v)
+    static vec4 Step(vec4 v)
+    static vec4 Step(Single v)
+    static vec4 Sqrt(vec4 v)
+    static vec4 Sqrt(Single v)
+    static vec4 InverseSqrt(vec4 v)
+    static vec4 InverseSqrt(Single v)
+    static ivec4 Sign(vec4 v)
+    static ivec4 Sign(Single v)
+    static vec4 Max(vec4 lhs, vec4 rhs)
+    static vec4 Max(vec4 lhs, Single rhs)
+    static vec4 Max(Single lhs, vec4 rhs)
+    static vec4 Max(Single lhs, Single rhs)
+    static vec4 Min(vec4 lhs, vec4 rhs)
+    static vec4 Min(vec4 lhs, Single rhs)
+    static vec4 Min(Single lhs, vec4 rhs)
+    static vec4 Min(Single lhs, Single rhs)
+    static vec4 Pow(vec4 lhs, vec4 rhs)
+    static vec4 Pow(vec4 lhs, Single rhs)
+    static vec4 Pow(Single lhs, vec4 rhs)
+    static vec4 Pow(Single lhs, Single rhs)
+    static vec4 Log(vec4 lhs, vec4 rhs)
+    static vec4 Log(vec4 lhs, Single rhs)
+    static vec4 Log(Single lhs, vec4 rhs)
+    static vec4 Log(Single lhs, Single rhs)
+    static vec4 Clamp(vec4 v, vec4 min, vec4 max)
+    static vec4 Clamp(vec4 v, vec4 min, Single max)
+    static vec4 Clamp(vec4 v, Single min, vec4 max)
+    static vec4 Clamp(vec4 v, Single min, Single max)
+    static vec4 Clamp(Single v, vec4 min, vec4 max)
+    static vec4 Clamp(Single v, vec4 min, Single max)
+    static vec4 Clamp(Single v, Single min, vec4 max)
+    static vec4 Clamp(Single v, Single min, Single max)
+    static vec4 Mix(vec4 min, vec4 max, vec4 a)
+    static vec4 Mix(vec4 min, vec4 max, Single a)
+    static vec4 Mix(vec4 min, Single max, vec4 a)
+    static vec4 Mix(vec4 min, Single max, Single a)
+    static vec4 Mix(Single min, vec4 max, vec4 a)
+    static vec4 Mix(Single min, vec4 max, Single a)
+    static vec4 Mix(Single min, Single max, vec4 a)
+    static vec4 Mix(Single min, Single max, Single a)
+    static vec4 Lerp(vec4 min, vec4 max, vec4 a)
+    static vec4 Lerp(vec4 min, vec4 max, Single a)
+    static vec4 Lerp(vec4 min, Single max, vec4 a)
+    static vec4 Lerp(vec4 min, Single max, Single a)
+    static vec4 Lerp(Single min, vec4 max, vec4 a)
+    static vec4 Lerp(Single min, vec4 max, Single a)
+    static vec4 Lerp(Single min, Single max, vec4 a)
+    static vec4 Lerp(Single min, Single max, Single a)
+    static vec4 Smoothstep(vec4 edge0, vec4 edge1, vec4 v)
+    static vec4 Smoothstep(vec4 edge0, vec4 edge1, Single v)
+    static vec4 Smoothstep(vec4 edge0, Single edge1, vec4 v)
+    static vec4 Smoothstep(vec4 edge0, Single edge1, Single v)
+    static vec4 Smoothstep(Single edge0, vec4 edge1, vec4 v)
+    static vec4 Smoothstep(Single edge0, vec4 edge1, Single v)
+    static vec4 Smoothstep(Single edge0, Single edge1, vec4 v)
+    static vec4 Smoothstep(Single edge0, Single edge1, Single v)
+    static vec4 Smootherstep(vec4 edge0, vec4 edge1, vec4 v)
+    static vec4 Smootherstep(vec4 edge0, vec4 edge1, Single v)
+    static vec4 Smootherstep(vec4 edge0, Single edge1, vec4 v)
+    static vec4 Smootherstep(vec4 edge0, Single edge1, Single v)
+    static vec4 Smootherstep(Single edge0, vec4 edge1, vec4 v)
+    static vec4 Smootherstep(Single edge0, vec4 edge1, Single v)
+    static vec4 Smootherstep(Single edge0, Single edge1, vec4 v)
+    static vec4 Smootherstep(Single edge0, Single edge1, Single v)
+    static vec4 Fma(vec4 a, vec4 b, vec4 c)
+    static vec4 Fma(vec4 a, vec4 b, Single c)
+    static vec4 Fma(vec4 a, Single b, vec4 c)
+    static vec4 Fma(vec4 a, Single b, Single c)
+    static vec4 Fma(Single a, vec4 b, vec4 c)
+    static vec4 Fma(Single a, vec4 b, Single c)
+    static vec4 Fma(Single a, Single b, vec4 c)
+    static vec4 Fma(Single a, Single b, Single c)
+    static vec4 Add(vec4 lhs, vec4 rhs)
+    static vec4 Add(vec4 lhs, Single rhs)
+    static vec4 Add(Single lhs, vec4 rhs)
+    static vec4 Add(Single lhs, Single rhs)
+    static vec4 Sub(vec4 lhs, vec4 rhs)
+    static vec4 Sub(vec4 lhs, Single rhs)
+    static vec4 Sub(Single lhs, vec4 rhs)
+    static vec4 Sub(Single lhs, Single rhs)
+    static vec4 Mul(vec4 lhs, vec4 rhs)
+    static vec4 Mul(vec4 lhs, Single rhs)
+    static vec4 Mul(Single lhs, vec4 rhs)
+    static vec4 Mul(Single lhs, Single rhs)
+    static vec4 Div(vec4 lhs, vec4 rhs)
+    static vec4 Div(vec4 lhs, Single rhs)
+    static vec4 Div(Single lhs, vec4 rhs)
+    static vec4 Div(Single lhs, Single rhs)
+    static vec4 Modulo(vec4 lhs, vec4 rhs)
+    static vec4 Modulo(vec4 lhs, Single rhs)
+    static vec4 Modulo(Single lhs, vec4 rhs)
+    static vec4 Modulo(Single lhs, Single rhs)
+    static vec4 Degrees(vec4 v)
+    static vec4 Degrees(Single v)
+    static vec4 Radians(vec4 v)
+    static vec4 Radians(Single v)
+    static vec4 Acos(vec4 v)
+    static vec4 Acos(Single v)
+    static vec4 Asin(vec4 v)
+    static vec4 Asin(Single v)
+    static vec4 Atan(vec4 v)
+    static vec4 Atan(Single v)
+    static vec4 Cos(vec4 v)
+    static vec4 Cos(Single v)
+    static vec4 Cosh(vec4 v)
+    static vec4 Cosh(Single v)
+    static vec4 Exp(vec4 v)
+    static vec4 Exp(Single v)
+    static vec4 Log(vec4 v)
+    static vec4 Log(Single v)
+    static vec4 Log2(vec4 v)
+    static vec4 Log2(Single v)
+    static vec4 Log10(vec4 v)
+    static vec4 Log10(Single v)
+    static vec4 Floor(vec4 v)
+    static vec4 Floor(Single v)
+    static vec4 Ceiling(vec4 v)
+    static vec4 Ceiling(Single v)
+    static vec4 Round(vec4 v)
+    static vec4 Round(Single v)
+    static vec4 Sin(vec4 v)
+    static vec4 Sin(Single v)
+    static vec4 Sinh(vec4 v)
+    static vec4 Sinh(Single v)
+    static vec4 Tan(vec4 v)
+    static vec4 Tan(Single v)
+    static vec4 Tanh(vec4 v)
+    static vec4 Tanh(Single v)
+    static vec4 Truncate(vec4 v)
+    static vec4 Truncate(Single v)
+    static vec4 Fract(vec4 v)
+    static vec4 Fract(Single v)
+    static vec4 Trunc(vec4 v)
+    static vec4 Trunc(Single v)
+    static vec4 Random(Random random, vec4 minValue, vec4 maxValue)
+    static vec4 Random(Random random, vec4 minValue, Single maxValue)
+    static vec4 Random(Random random, Single minValue, vec4 maxValue)
+    static vec4 Random(Random random, Single minValue, Single maxValue)
+    static vec4 RandomUniform(Random random, vec4 minValue, vec4 maxValue)
+    static vec4 RandomUniform(Random random, vec4 minValue, Single maxValue)
+    static vec4 RandomUniform(Random random, Single minValue, vec4 maxValue)
+    static vec4 RandomUniform(Random random, Single minValue, Single maxValue)
+    static vec4 RandomNormal(Random random, vec4 mean, vec4 variance)
+    static vec4 RandomNormal(Random random, vec4 mean, Single variance)
+    static vec4 RandomNormal(Random random, Single mean, vec4 variance)
+    static vec4 RandomNormal(Random random, Single mean, Single variance)
+    static vec4 RandomGaussian(Random random, vec4 mean, vec4 variance)
+    static vec4 RandomGaussian(Random random, vec4 mean, Single variance)
+    static vec4 RandomGaussian(Random random, Single mean, vec4 variance)
+    static vec4 RandomGaussian(Random random, Single mean, Single variance)
+    static bvec4 op_LessThan(vec4 lhs, vec4 rhs)
+    static bvec4 op_LessThan(vec4 lhs, Single rhs)
+    static bvec4 op_LessThan(Single lhs, vec4 rhs)
+    static bvec4 op_LessThanOrEqual(vec4 lhs, vec4 rhs)
+    static bvec4 op_LessThanOrEqual(vec4 lhs, Single rhs)
+    static bvec4 op_LessThanOrEqual(Single lhs, vec4 rhs)
+    static bvec4 op_GreaterThan(vec4 lhs, vec4 rhs)
+    static bvec4 op_GreaterThan(vec4 lhs, Single rhs)
+    static bvec4 op_GreaterThan(Single lhs, vec4 rhs)
+    static bvec4 op_GreaterThanOrEqual(vec4 lhs, vec4 rhs)
+    static bvec4 op_GreaterThanOrEqual(vec4 lhs, Single rhs)
+    static bvec4 op_GreaterThanOrEqual(Single lhs, vec4 rhs)
+    static vec4 op_Addition(vec4 lhs, vec4 rhs)
+    static vec4 op_Addition(vec4 lhs, Single rhs)
+    static vec4 op_Addition(Single lhs, vec4 rhs)
+    static vec4 op_Subtraction(vec4 lhs, vec4 rhs)
+    static vec4 op_Subtraction(vec4 lhs, Single rhs)
+    static vec4 op_Subtraction(Single lhs, vec4 rhs)
+    static vec4 op_Multiply(vec4 lhs, vec4 rhs)
+    static vec4 op_Multiply(vec4 lhs, Single rhs)
+    static vec4 op_Multiply(Single lhs, vec4 rhs)
+    static vec4 op_Division(vec4 lhs, vec4 rhs)
+    static vec4 op_Division(vec4 lhs, Single rhs)
+    static vec4 op_Division(Single lhs, vec4 rhs)
+    static vec4 op_UnaryPlus(vec4 v)
+    static vec4 op_UnaryNegation(vec4 v)
+    static vec4 op_Modulus(vec4 lhs, vec4 rhs)
+    static vec4 op_Modulus(vec4 lhs, Single rhs)
+    static vec4 op_Modulus(Single lhs, vec4 rhs)
+    ctor(Single x, Single y, Single z, Single w)
+    ctor(Single v)
+    ctor(vec2 v)
+    ctor(vec2 v, Single z)
+    ctor(vec2 v, Single z, Single w)
+    ctor(vec3 v)
+    ctor(vec3 v, Single w)
+    ctor(vec4 v)
+    ctor(IReadOnlyList`1 v)
+    ctor(Object[] v)
+    ctor(Single[] v)
+    ctor(Single[] v, Int32 startIndex)
+    ctor(IEnumerable`1 v)
+=== GlmSharp.quat  [struct] ===
+    field Single x
+    field Single y
+    field Single z
+    field Single w
+    prop Single Item { get:True set:True }
+    prop Single[] Values { get:True set:False }
+    prop Int32 Count { get:True set:False }
+    prop Single Length { get:True set:False }
+    prop Single LengthSqr { get:True set:False }
+    prop quat Normalized { get:True set:False }
+    prop quat NormalizedSafe { get:True set:False }
+    prop Double Angle { get:True set:False }
+    prop vec3 Axis { get:True set:False }
+    prop Double Yaw { get:True set:False }
+    prop Double Pitch { get:True set:False }
+    prop Double Roll { get:True set:False }
+    prop dvec3 EulerAngles { get:True set:False }
+    prop mat3 ToMat3 { get:True set:False }
+    prop mat4 ToMat4 { get:True set:False }
+    prop quat Conjugate { get:True set:False }
+    prop quat Inverse { get:True set:False }
+    prop quat Zero { get:True set:False }
+    prop quat Ones { get:True set:False }
+    prop quat Identity { get:True set:False }
+    prop quat UnitX { get:True set:False }
+    prop quat UnitY { get:True set:False }
+    prop quat UnitZ { get:True set:False }
+    prop quat UnitW { get:True set:False }
+    prop quat MaxValue { get:True set:False }
+    prop quat MinValue { get:True set:False }
+    prop quat Epsilon { get:True set:False }
+    prop quat NaN { get:True set:False }
+    prop quat NegativeInfinity { get:True set:False }
+    prop quat PositiveInfinity { get:True set:False }
+    static dquat op_Implicit(quat v)
+    static cquat op_Implicit(quat v)
+    static ivec4 op_Explicit(quat v)
+    static iquat op_Explicit(quat v)
+    static uvec4 op_Explicit(quat v)
+    static uquat op_Explicit(quat v)
+    static vec4 op_Explicit(quat v)
+    static hvec4 op_Explicit(quat v)
+    static hquat op_Explicit(quat v)
+    static dvec4 op_Explicit(quat v)
+    static decvec4 op_Explicit(quat v)
+    static decquat op_Explicit(quat v)
+    static cvec4 op_Explicit(quat v)
+    static lvec4 op_Explicit(quat v)
+    static lquat op_Explicit(quat v)
+    static bvec4 op_Explicit(quat v)
+    static bquat op_Explicit(quat v)
+    static quat op_Explicit(mat3 m)
+    static quat op_Explicit(mat4 m)
+    static quat get_Zero()
+    static quat get_Ones()
+    static quat get_Identity()
+    static quat get_UnitX()
+    static quat get_UnitY()
+    static quat get_UnitZ()
+    static quat get_UnitW()
+    static quat get_MaxValue()
+    static quat get_MinValue()
+    static quat get_Epsilon()
+    static quat get_NaN()
+    static quat get_NegativeInfinity()
+    static quat get_PositiveInfinity()
+    static Boolean op_Equality(quat lhs, quat rhs)
+    static Boolean op_Inequality(quat lhs, quat rhs)
+    static quat op_Multiply(quat p, quat q)
+    static vec3 op_Multiply(quat q, vec3 v)
+    static vec4 op_Multiply(quat q, vec4 v)
+    static vec3 op_Multiply(vec3 v, quat q)
+    static vec4 op_Multiply(vec4 v, quat q)
+    static quat Parse(String s)
+    static quat Parse(String s, String sep)
+    static quat Parse(String s, String sep, IFormatProvider provider)
+    static quat Parse(String s, String sep, NumberStyles style)
+    static quat Parse(String s, String sep, NumberStyles style, IFormatProvider provider)
+    static Boolean TryParse(String s, ref quat& result)
+    static Boolean TryParse(String s, String sep, ref quat& result)
+    static Boolean TryParse(String s, String sep, NumberStyles style, IFormatProvider provider, ref quat& result)
+    static Single Dot(quat lhs, quat rhs)
+    static quat FromAxisAngle(Single angle, vec3 v)
+    static quat FromMat3(mat3 m)
+    static quat FromMat4(mat4 m)
+    static quat Cross(quat q1, quat q2)
+    static quat Mix(quat x, quat y, Single a)
+    static quat SLerp(quat x, quat y, Single a)
+    static quat Squad(quat q1, quat q2, quat s1, quat s2, Single h)
+    static bvec4 IsInfinity(quat v)
+    static bvec4 IsInfinity(Single v)
+    static bvec4 IsFinite(quat v)
+    static bvec4 IsFinite(Single v)
+    static bvec4 IsNaN(quat v)
+    static bvec4 IsNaN(Single v)
+    static bvec4 IsNegativeInfinity(quat v)
+    static bvec4 IsNegativeInfinity(Single v)
+    static bvec4 IsPositiveInfinity(quat v)
+    static bvec4 IsPositiveInfinity(Single v)
+    static bvec4 Equal(quat lhs, quat rhs)
+    static bvec4 Equal(quat lhs, Single rhs)
+    static bvec4 Equal(Single lhs, quat rhs)
+    static bvec4 Equal(Single lhs, Single rhs)
+    static bvec4 NotEqual(quat lhs, quat rhs)
+    static bvec4 NotEqual(quat lhs, Single rhs)
+    static bvec4 NotEqual(Single lhs, quat rhs)
+    static bvec4 NotEqual(Single lhs, Single rhs)
+    static bvec4 GreaterThan(quat lhs, quat rhs)
+    static bvec4 GreaterThan(quat lhs, Single rhs)
+    static bvec4 GreaterThan(Single lhs, quat rhs)
+    static bvec4 GreaterThan(Single lhs, Single rhs)
+    static bvec4 GreaterThanEqual(quat lhs, quat rhs)
+    static bvec4 GreaterThanEqual(quat lhs, Single rhs)
+    static bvec4 GreaterThanEqual(Single lhs, quat rhs)
+    static bvec4 GreaterThanEqual(Single lhs, Single rhs)
+    static bvec4 LesserThan(quat lhs, quat rhs)
+    static bvec4 LesserThan(quat lhs, Single rhs)
+    static bvec4 LesserThan(Single lhs, quat rhs)
+    static bvec4 LesserThan(Single lhs, Single rhs)
+    static bvec4 LesserThanEqual(quat lhs, quat rhs)
+    static bvec4 LesserThanEqual(quat lhs, Single rhs)
+    static bvec4 LesserThanEqual(Single lhs, quat rhs)
+    static bvec4 LesserThanEqual(Single lhs, Single rhs)
+    static quat Lerp(quat min, quat max, quat a)
+    static quat Lerp(quat min, quat max, Single a)
+    static quat Lerp(quat min, Single max, quat a)
+    static quat Lerp(quat min, Single max, Single a)
+    static quat Lerp(Single min, quat max, quat a)
+    static quat Lerp(Single min, quat max, Single a)
+    static quat Lerp(Single min, Single max, quat a)
+    static quat Lerp(Single min, Single max, Single a)
+    static bvec4 op_LessThan(quat lhs, quat rhs)
+    static bvec4 op_LessThan(quat lhs, Single rhs)
+    static bvec4 op_LessThan(Single lhs, quat rhs)
+    static bvec4 op_LessThanOrEqual(quat lhs, quat rhs)
+    static bvec4 op_LessThanOrEqual(quat lhs, Single rhs)
+    static bvec4 op_LessThanOrEqual(Single lhs, quat rhs)
+    static bvec4 op_GreaterThan(quat lhs, quat rhs)
+    static bvec4 op_GreaterThan(quat lhs, Single rhs)
+    static bvec4 op_GreaterThan(Single lhs, quat rhs)
+    static bvec4 op_GreaterThanOrEqual(quat lhs, quat rhs)
+    static bvec4 op_GreaterThanOrEqual(quat lhs, Single rhs)
+    static bvec4 op_GreaterThanOrEqual(Single lhs, quat rhs)
+    static quat op_UnaryPlus(quat v)
+    static quat op_UnaryNegation(quat v)
+    static quat op_Addition(quat lhs, quat rhs)
+    static quat op_Addition(quat lhs, Single rhs)
+    static quat op_Addition(Single lhs, quat rhs)
+    static quat op_Subtraction(quat lhs, quat rhs)
+    static quat op_Subtraction(quat lhs, Single rhs)
+    static quat op_Subtraction(Single lhs, quat rhs)
+    static quat op_Multiply(quat lhs, Single rhs)
+    static quat op_Multiply(Single lhs, quat rhs)
+    static quat op_Division(quat lhs, Single rhs)
+    ctor(Single x, Single y, Single z, Single w)
+    ctor(Single v)
+    ctor(quat q)
+    ctor(vec3 v, Single s)
+    ctor(vec3 u, vec3 v)
+    ctor(vec3 eulerAngle)
+    ctor(mat3 m)
+    ctor(mat4 m)
+=== GlmSharp.mat3  [struct] ===
+    field Single m00
+    field Single m01
+    field Single m02
+    field Single m10
+    field Single m11
+    field Single m12
+    field Single m20
+    field Single m21
+    field Single m22
+    prop Single[,] Values { get:True set:False }
+    prop Single[] Values1D { get:True set:False }
+    prop vec3 Column0 { get:True set:True }
+    prop vec3 Column1 { get:True set:True }
+    prop vec3 Column2 { get:True set:True }
+    prop vec3 Row0 { get:True set:True }
+    prop vec3 Row1 { get:True set:True }
+    prop vec3 Row2 { get:True set:True }
+    prop quat ToQuaternion { get:True set:False }
+    prop mat3 Zero { get:True set:False }
+    prop mat3 Ones { get:True set:False }
+    prop mat3 Identity { get:True set:False }
+    prop mat3 AllMaxValue { get:True set:False }
+    prop mat3 DiagonalMaxValue { get:True set:False }
+    prop mat3 AllMinValue { get:True set:False }
+    prop mat3 DiagonalMinValue { get:True set:False }
+    prop mat3 AllEpsilon { get:True set:False }
+    prop mat3 DiagonalEpsilon { get:True set:False }
+    prop mat3 AllNaN { get:True set:False }
+    prop mat3 DiagonalNaN { get:True set:False }
+    prop mat3 AllNegativeInfinity { get:True set:False }
+    prop mat3 DiagonalNegativeInfinity { get:True set:False }
+    prop mat3 AllPositiveInfinity { get:True set:False }
+    prop mat3 DiagonalPositiveInfinity { get:True set:False }
+    prop Int32 Count { get:True set:False }
+    prop Single Item { get:True set:True }
+    prop Single Item { get:True set:True }
+    prop mat3 Transposed { get:True set:False }
+    prop Single MinElement { get:True set:False }
+    prop Single MaxElement { get:True set:False }
+    prop Single Length { get:True set:False }
+    prop Single LengthSqr { get:True set:False }
+    prop Single Sum { get:True set:False }
+    prop Single Norm { get:True set:False }
+    prop Single Norm1 { get:True set:False }
+    prop Single Norm2 { get:True set:False }
+    prop Single NormMax { get:True set:False }
+    prop Single Determinant { get:True set:False }
+    prop mat3 Adjugate { get:True set:False }
+    prop mat3 Inverse { get:True set:False }
+    static mat3 op_Explicit(quat q)
+    static mat3 get_Zero()
+    static mat3 get_Ones()
+    static mat3 get_Identity()
+    static mat3 get_AllMaxValue()
+    static mat3 get_DiagonalMaxValue()
+    static mat3 get_AllMinValue()
+    static mat3 get_DiagonalMinValue()
+    static mat3 get_AllEpsilon()
+    static mat3 get_DiagonalEpsilon()
+    static mat3 get_AllNaN()
+    static mat3 get_DiagonalNaN()
+    static mat3 get_AllNegativeInfinity()
+    static mat3 get_DiagonalNegativeInfinity()
+    static mat3 get_AllPositiveInfinity()
+    static mat3 get_DiagonalPositiveInfinity()
+    static Boolean op_Equality(mat3 lhs, mat3 rhs)
+    static Boolean op_Inequality(mat3 lhs, mat3 rhs)
+    static mat2x3 op_Multiply(mat3 lhs, mat2x3 rhs)
+    static mat3 op_Multiply(mat3 lhs, mat3 rhs)
+    static mat4x3 op_Multiply(mat3 lhs, mat4x3 rhs)
+    static vec3 op_Multiply(mat3 m, vec3 v)
+    static mat3 op_Division(mat3 A, mat3 B)
+    static mat3 CompMul(mat3 A, mat3 B)
+    static mat3 CompDiv(mat3 A, mat3 B)
+    static mat3 CompAdd(mat3 A, mat3 B)
+    static mat3 CompSub(mat3 A, mat3 B)
+    static mat3 op_Addition(mat3 lhs, mat3 rhs)
+    static mat3 op_Addition(mat3 lhs, Single rhs)
+    static mat3 op_Addition(Single lhs, mat3 rhs)
+    static mat3 op_Subtraction(mat3 lhs, mat3 rhs)
+    static mat3 op_Subtraction(mat3 lhs, Single rhs)
+    static mat3 op_Subtraction(Single lhs, mat3 rhs)
+    static mat3 op_Division(mat3 lhs, Single rhs)
+    static mat3 op_Division(Single lhs, mat3 rhs)
+    static mat3 op_Multiply(mat3 lhs, Single rhs)
+    static mat3 op_Multiply(Single lhs, mat3 rhs)
+    static bmat3 op_LessThan(mat3 lhs, mat3 rhs)
+    static bmat3 op_LessThan(mat3 lhs, Single rhs)
+    static bmat3 op_LessThan(Single lhs, mat3 rhs)
+    static bmat3 op_LessThanOrEqual(mat3 lhs, mat3 rhs)
+    static bmat3 op_LessThanOrEqual(mat3 lhs, Single rhs)
+    static bmat3 op_LessThanOrEqual(Single lhs, mat3 rhs)
+    static bmat3 op_GreaterThan(mat3 lhs, mat3 rhs)
+    static bmat3 op_GreaterThan(mat3 lhs, Single rhs)
+    static bmat3 op_GreaterThan(Single lhs, mat3 rhs)
+    static bmat3 op_GreaterThanOrEqual(mat3 lhs, mat3 rhs)
+    static bmat3 op_GreaterThanOrEqual(mat3 lhs, Single rhs)
+    static bmat3 op_GreaterThanOrEqual(Single lhs, mat3 rhs)
+    ctor(Single m00, Single m01, Single m02, Single m10, Single m11, Single m12, Single m20, Single m21, Single m22)
+    ctor(mat2 m)
+    ctor(mat3x2 m)
+    ctor(mat4x2 m)
+    ctor(mat2x3 m)
+    ctor(mat3 m)
+    ctor(mat4x3 m)
+    ctor(mat2x4 m)
+    ctor(mat3x4 m)
+    ctor(mat4 m)
+    ctor(vec2 c0, vec2 c1)
+    ctor(vec2 c0, vec2 c1, vec2 c2)
+    ctor(vec3 c0, vec3 c1)
+    ctor(vec3 c0, vec3 c1, vec3 c2)
+    ctor(quat q)
+=== GlmSharp.mat4  [struct] ===
+    field Single m00
+    field Single m01
+    field Single m02
+    field Single m03
+    field Single m10
+    field Single m11
+    field Single m12
+    field Single m13
+    field Single m20
+    field Single m21
+    field Single m22
+    field Single m23
+    field Single m30
+    field Single m31
+    field Single m32
+    field Single m33
+    prop Single[,] Values { get:True set:False }
+    prop Single[] Values1D { get:True set:False }
+    prop vec4 Column0 { get:True set:True }
+    prop vec4 Column1 { get:True set:True }
+    prop vec4 Column2 { get:True set:True }
+    prop vec4 Column3 { get:True set:True }
+    prop vec4 Row0 { get:True set:True }
+    prop vec4 Row1 { get:True set:True }
+    prop vec4 Row2 { get:True set:True }
+    prop vec4 Row3 { get:True set:True }
+    prop quat ToQuaternion { get:True set:False }
+    prop mat4 Zero { get:True set:False }
+    prop mat4 Ones { get:True set:False }
+    prop mat4 Identity { get:True set:False }
+    prop mat4 AllMaxValue { get:True set:False }
+    prop mat4 DiagonalMaxValue { get:True set:False }
+    prop mat4 AllMinValue { get:True set:False }
+    prop mat4 DiagonalMinValue { get:True set:False }
+    prop mat4 AllEpsilon { get:True set:False }
+    prop mat4 DiagonalEpsilon { get:True set:False }
+    prop mat4 AllNaN { get:True set:False }
+    prop mat4 DiagonalNaN { get:True set:False }
+    prop mat4 AllNegativeInfinity { get:True set:False }
+    prop mat4 DiagonalNegativeInfinity { get:True set:False }
+    prop mat4 AllPositiveInfinity { get:True set:False }
+    prop mat4 DiagonalPositiveInfinity { get:True set:False }
+    prop Int32 Count { get:True set:False }
+    prop Single Item { get:True set:True }
+    prop Single Item { get:True set:True }
+    prop mat4 Transposed { get:True set:False }
+    prop Single MinElement { get:True set:False }
+    prop Single MaxElement { get:True set:False }
+    prop Single Length { get:True set:False }
+    prop Single LengthSqr { get:True set:False }
+    prop Single Sum { get:True set:False }
+    prop Single Norm { get:True set:False }
+    prop Single Norm1 { get:True set:False }
+    prop Single Norm2 { get:True set:False }
+    prop Single NormMax { get:True set:False }
+    prop Single Determinant { get:True set:False }
+    prop mat4 Adjugate { get:True set:False }
+    prop mat4 Inverse { get:True set:False }
+    static mat4 op_Explicit(quat q)
+    static mat4 get_Zero()
+    static mat4 get_Ones()
+    static mat4 get_Identity()
+    static mat4 get_AllMaxValue()
+    static mat4 get_DiagonalMaxValue()
+    static mat4 get_AllMinValue()
+    static mat4 get_DiagonalMinValue()
+    static mat4 get_AllEpsilon()
+    static mat4 get_DiagonalEpsilon()
+    static mat4 get_AllNaN()
+    static mat4 get_DiagonalNaN()
+    static mat4 get_AllNegativeInfinity()
+    static mat4 get_DiagonalNegativeInfinity()
+    static mat4 get_AllPositiveInfinity()
+    static mat4 get_DiagonalPositiveInfinity()
+    static Boolean op_Equality(mat4 lhs, mat4 rhs)
+    static Boolean op_Inequality(mat4 lhs, mat4 rhs)
+    static mat2x4 op_Multiply(mat4 lhs, mat2x4 rhs)
+    static mat3x4 op_Multiply(mat4 lhs, mat3x4 rhs)
+    static mat4 op_Multiply(mat4 lhs, mat4 rhs)
+    static vec4 op_Multiply(mat4 m, vec4 v)
+    static mat4 op_Division(mat4 A, mat4 B)
+    static mat4 CompMul(mat4 A, mat4 B)
+    static mat4 CompDiv(mat4 A, mat4 B)
+    static mat4 CompAdd(mat4 A, mat4 B)
+    static mat4 CompSub(mat4 A, mat4 B)
+    static mat4 op_Addition(mat4 lhs, mat4 rhs)
+    static mat4 op_Addition(mat4 lhs, Single rhs)
+    static mat4 op_Addition(Single lhs, mat4 rhs)
+    static mat4 op_Subtraction(mat4 lhs, mat4 rhs)
+    static mat4 op_Subtraction(mat4 lhs, Single rhs)
+    static mat4 op_Subtraction(Single lhs, mat4 rhs)
+    static mat4 op_Division(mat4 lhs, Single rhs)
+    static mat4 op_Division(Single lhs, mat4 rhs)
+    static mat4 op_Multiply(mat4 lhs, Single rhs)
+    static mat4 op_Multiply(Single lhs, mat4 rhs)
+    static bmat4 op_LessThan(mat4 lhs, mat4 rhs)
+    static bmat4 op_LessThan(mat4 lhs, Single rhs)
+    static bmat4 op_LessThan(Single lhs, mat4 rhs)
+    static bmat4 op_LessThanOrEqual(mat4 lhs, mat4 rhs)
+    static bmat4 op_LessThanOrEqual(mat4 lhs, Single rhs)
+    static bmat4 op_LessThanOrEqual(Single lhs, mat4 rhs)
+    static bmat4 op_GreaterThan(mat4 lhs, mat4 rhs)
+    static bmat4 op_GreaterThan(mat4 lhs, Single rhs)
+    static bmat4 op_GreaterThan(Single lhs, mat4 rhs)
+    static bmat4 op_GreaterThanOrEqual(mat4 lhs, mat4 rhs)
+    static bmat4 op_GreaterThanOrEqual(mat4 lhs, Single rhs)
+    static bmat4 op_GreaterThanOrEqual(Single lhs, mat4 rhs)
+    static mat4 Frustum(Single left, Single right, Single bottom, Single top, Single nearVal, Single farVal)
+    static mat4 InfinitePerspective(Single fovy, Single aspect, Single zNear)
+    static mat4 LookAt(vec3 eye, vec3 center, vec3 up)
+    static mat4 Ortho(Single left, Single right, Single bottom, Single top, Single zNear, Single zFar)
+    static mat4 Ortho(Single left, Single right, Single bottom, Single top)
+    static mat4 Perspective(Single fovy, Single aspect, Single zNear, Single zFar)
+    static mat4 PerspectiveFov(Single fov, Single width, Single height, Single zNear, Single zFar)
+    static vec3 Project(vec3 obj, mat4 model, mat4 proj, vec4 viewport)
+    static vec3 UnProject(vec3 win, mat4 model, mat4 proj, vec4 viewport)
+    static vec3 UnProjectFaster(vec3 win, mat4 model, mat4 proj, vec4 viewport)
+    static mat4 Rotate(Single angle, vec3 v)
+    static mat4 RotateX(Single angle)
+    static mat4 RotateY(Single angle)
+    static mat4 RotateZ(Single angle)
+    static mat4 Scale(Single x, Single y, Single z)
+    static mat4 Scale(vec3 v)
+    static mat4 Scale(Single s)
+    static mat4 Translate(Single x, Single y, Single z)
+    static mat4 Translate(vec3 v)
+    ctor(Single m00, Single m01, Single m02, Single m03, Single m10, Single m11, Single m12, Single m13, Single m20, Single m21, Single m22, Single m23, Single m30, Single m31, Single m32, Single m33)
+    ctor(mat2 m)
+    ctor(mat3x2 m)
+    ctor(mat4x2 m)
+    ctor(mat2x3 m)
+    ctor(mat3 m)
+    ctor(mat4x3 m)
+    ctor(mat2x4 m)
+    ctor(mat3x4 m)
+    ctor(mat4 m)
+    ctor(vec2 c0, vec2 c1)
+    ctor(vec2 c0, vec2 c1, vec2 c2)
+    ctor(vec2 c0, vec2 c1, vec2 c2, vec2 c3)
+    ctor(vec3 c0, vec3 c1)
+    ctor(vec3 c0, vec3 c1, vec3 c2)
+    ctor(vec3 c0, vec3 c1, vec3 c2, vec3 c3)
+    ctor(vec4 c0, vec4 c1)
+    ctor(vec4 c0, vec4 c1, vec4 c2)
+    ctor(vec4 c0, vec4 c1, vec4 c2, vec4 c3)
+    ctor(quat q)
+=== GlmSharp.uvec2  [struct] ===
+    field UInt32 x
+    field UInt32 y
+    prop UInt32 Item { get:True set:True }
+    prop swizzle_uvec2 swizzle { get:True set:False }
+    prop uvec2 xy { get:True set:True }
+    prop uvec2 rg { get:True set:True }
+    prop UInt32 r { get:True set:True }
+    prop UInt32 g { get:True set:True }
+    prop UInt32[] Values { get:True set:False }
+    prop Int32 Count { get:True set:False }
+    prop UInt32 MinElement { get:True set:False }
+    prop UInt32 MaxElement { get:True set:False }
+    prop Single Length { get:True set:False }
+    prop Single LengthSqr { get:True set:False }
+    prop UInt32 Sum { get:True set:False }
+    prop Single Norm { get:True set:False }
+    prop Single Norm1 { get:True set:False }
+    prop Single Norm2 { get:True set:False }
+    prop Single NormMax { get:True set:False }
+    prop uvec2 Zero { get:True set:False }
+    prop uvec2 Ones { get:True set:False }
+    prop uvec2 UnitX { get:True set:False }
+    prop uvec2 UnitY { get:True set:False }
+    prop uvec2 MaxValue { get:True set:False }
+    prop uvec2 MinValue { get:True set:False }
+    static lvec2 op_Implicit(uvec2 v)
+    static vec2 op_Implicit(uvec2 v)
+    static hvec2 op_Implicit(uvec2 v)
+    static dvec2 op_Implicit(uvec2 v)
+    static decvec2 op_Implicit(uvec2 v)
+    static cvec2 op_Implicit(uvec2 v)
+    static ivec2 op_Explicit(uvec2 v)
+    static ivec3 op_Explicit(uvec2 v)
+    static ivec4 op_Explicit(uvec2 v)
+    static uvec3 op_Explicit(uvec2 v)
+    static uvec4 op_Explicit(uvec2 v)
+    static vec3 op_Explicit(uvec2 v)
+    static vec4 op_Explicit(uvec2 v)
+    static hvec3 op_Explicit(uvec2 v)
+    static hvec4 op_Explicit(uvec2 v)
+    static dvec3 op_Explicit(uvec2 v)
+    static dvec4 op_Explicit(uvec2 v)
+    static decvec3 op_Explicit(uvec2 v)
+    static decvec4 op_Explicit(uvec2 v)
+    static cvec3 op_Explicit(uvec2 v)
+    static cvec4 op_Explicit(uvec2 v)
+    static lvec3 op_Explicit(uvec2 v)
+    static lvec4 op_Explicit(uvec2 v)
+    static bvec2 op_Explicit(uvec2 v)
+    static bvec3 op_Explicit(uvec2 v)
+    static bvec4 op_Explicit(uvec2 v)
+    static UInt32[] op_Explicit(uvec2 v)
+    static Object[] op_Explicit(uvec2 v)
+    static uvec2 get_Zero()
+    static uvec2 get_Ones()
+    static uvec2 get_UnitX()
+    static uvec2 get_UnitY()
+    static uvec2 get_MaxValue()
+    static uvec2 get_MinValue()
+    static Boolean op_Equality(uvec2 lhs, uvec2 rhs)
+    static Boolean op_Inequality(uvec2 lhs, uvec2 rhs)
+    static uvec2 Parse(String s)
+    static uvec2 Parse(String s, String sep)
+    static uvec2 Parse(String s, String sep, IFormatProvider provider)
+    static uvec2 Parse(String s, String sep, NumberStyles style)
+    static uvec2 Parse(String s, String sep, NumberStyles style, IFormatProvider provider)
+    static Boolean TryParse(String s, ref uvec2& result)
+    static Boolean TryParse(String s, String sep, ref uvec2& result)
+    static Boolean TryParse(String s, String sep, NumberStyles style, IFormatProvider provider, ref uvec2& result)
+    static umat2 OuterProduct(uvec2 c, uvec2 r)
+    static umat2x3 OuterProduct(uvec3 c, uvec2 r)
+    static umat3x2 OuterProduct(uvec2 c, uvec3 r)
+    static umat2x4 OuterProduct(uvec4 c, uvec2 r)
+    static umat4x2 OuterProduct(uvec2 c, uvec4 r)
+    static UInt32 Dot(uvec2 lhs, uvec2 rhs)
+    static Single Distance(uvec2 lhs, uvec2 rhs)
+    static Single DistanceSqr(uvec2 lhs, uvec2 rhs)
+    static UInt32 Cross(uvec2 l, uvec2 r)
+    static uvec2 Random(Random random)
+    static bvec2 Equal(uvec2 lhs, uvec2 rhs)
+    static bvec2 Equal(uvec2 lhs, UInt32 rhs)
+    static bvec2 Equal(UInt32 lhs, uvec2 rhs)
+    static bvec2 Equal(UInt32 lhs, UInt32 rhs)
+    static bvec2 NotEqual(uvec2 lhs, uvec2 rhs)
+    static bvec2 NotEqual(uvec2 lhs, UInt32 rhs)
+    static bvec2 NotEqual(UInt32 lhs, uvec2 rhs)
+    static bvec2 NotEqual(UInt32 lhs, UInt32 rhs)
+    static bvec2 GreaterThan(uvec2 lhs, uvec2 rhs)
+    static bvec2 GreaterThan(uvec2 lhs, UInt32 rhs)
+    static bvec2 GreaterThan(UInt32 lhs, uvec2 rhs)
+    static bvec2 GreaterThan(UInt32 lhs, UInt32 rhs)
+    static bvec2 GreaterThanEqual(uvec2 lhs, uvec2 rhs)
+    static bvec2 GreaterThanEqual(uvec2 lhs, UInt32 rhs)
+    static bvec2 GreaterThanEqual(UInt32 lhs, uvec2 rhs)
+    static bvec2 GreaterThanEqual(UInt32 lhs, UInt32 rhs)
+    static bvec2 LesserThan(uvec2 lhs, uvec2 rhs)
+    static bvec2 LesserThan(uvec2 lhs, UInt32 rhs)
+    static bvec2 LesserThan(UInt32 lhs, uvec2 rhs)
+    static bvec2 LesserThan(UInt32 lhs, UInt32 rhs)
+    static bvec2 LesserThanEqual(uvec2 lhs, uvec2 rhs)
+    static bvec2 LesserThanEqual(uvec2 lhs, UInt32 rhs)
+    static bvec2 LesserThanEqual(UInt32 lhs, uvec2 rhs)
+    static bvec2 LesserThanEqual(UInt32 lhs, UInt32 rhs)
+    static uvec2 Abs(uvec2 v)
+    static uvec2 Abs(UInt32 v)
+    static uvec2 HermiteInterpolationOrder3(uvec2 v)
+    static uvec2 HermiteInterpolationOrder3(UInt32 v)
+    static uvec2 HermiteInterpolationOrder5(uvec2 v)
+    static uvec2 HermiteInterpolationOrder5(UInt32 v)
+    static uvec2 Sqr(uvec2 v)
+    static uvec2 Sqr(UInt32 v)
+    static uvec2 Pow2(uvec2 v)
+    static uvec2 Pow2(UInt32 v)
+    static uvec2 Pow3(uvec2 v)
+    static uvec2 Pow3(UInt32 v)
+    static uvec2 Step(uvec2 v)
+    static uvec2 Step(UInt32 v)
+    static uvec2 Sqrt(uvec2 v)
+    static uvec2 Sqrt(UInt32 v)
+    static uvec2 InverseSqrt(uvec2 v)
+    static uvec2 InverseSqrt(UInt32 v)
+    static ivec2 Sign(uvec2 v)
+    static ivec2 Sign(UInt32 v)
+    static uvec2 Max(uvec2 lhs, uvec2 rhs)
+    static uvec2 Max(uvec2 lhs, UInt32 rhs)
+    static uvec2 Max(UInt32 lhs, uvec2 rhs)
+    static uvec2 Max(UInt32 lhs, UInt32 rhs)
+    static uvec2 Min(uvec2 lhs, uvec2 rhs)
+    static uvec2 Min(uvec2 lhs, UInt32 rhs)
+    static uvec2 Min(UInt32 lhs, uvec2 rhs)
+    static uvec2 Min(UInt32 lhs, UInt32 rhs)
+    static uvec2 Pow(uvec2 lhs, uvec2 rhs)
+    static uvec2 Pow(uvec2 lhs, UInt32 rhs)
+    static uvec2 Pow(UInt32 lhs, uvec2 rhs)
+    static uvec2 Pow(UInt32 lhs, UInt32 rhs)
+    static uvec2 Log(uvec2 lhs, uvec2 rhs)
+    static uvec2 Log(uvec2 lhs, UInt32 rhs)
+    static uvec2 Log(UInt32 lhs, uvec2 rhs)
+    static uvec2 Log(UInt32 lhs, UInt32 rhs)
+    static uvec2 Clamp(uvec2 v, uvec2 min, uvec2 max)
+    static uvec2 Clamp(uvec2 v, uvec2 min, UInt32 max)
+    static uvec2 Clamp(uvec2 v, UInt32 min, uvec2 max)
+    static uvec2 Clamp(uvec2 v, UInt32 min, UInt32 max)
+    static uvec2 Clamp(UInt32 v, uvec2 min, uvec2 max)
+    static uvec2 Clamp(UInt32 v, uvec2 min, UInt32 max)
+    static uvec2 Clamp(UInt32 v, UInt32 min, uvec2 max)
+    static uvec2 Clamp(UInt32 v, UInt32 min, UInt32 max)
+    static uvec2 Mix(uvec2 min, uvec2 max, uvec2 a)
+    static uvec2 Mix(uvec2 min, uvec2 max, UInt32 a)
+    static uvec2 Mix(uvec2 min, UInt32 max, uvec2 a)
+    static uvec2 Mix(uvec2 min, UInt32 max, UInt32 a)
+    static uvec2 Mix(UInt32 min, uvec2 max, uvec2 a)
+    static uvec2 Mix(UInt32 min, uvec2 max, UInt32 a)
+    static uvec2 Mix(UInt32 min, UInt32 max, uvec2 a)
+    static uvec2 Mix(UInt32 min, UInt32 max, UInt32 a)
+    static uvec2 Lerp(uvec2 min, uvec2 max, uvec2 a)
+    static uvec2 Lerp(uvec2 min, uvec2 max, UInt32 a)
+    static uvec2 Lerp(uvec2 min, UInt32 max, uvec2 a)
+    static uvec2 Lerp(uvec2 min, UInt32 max, UInt32 a)
+    static uvec2 Lerp(UInt32 min, uvec2 max, uvec2 a)
+    static uvec2 Lerp(UInt32 min, uvec2 max, UInt32 a)
+    static uvec2 Lerp(UInt32 min, UInt32 max, uvec2 a)
+    static uvec2 Lerp(UInt32 min, UInt32 max, UInt32 a)
+    static uvec2 Smoothstep(uvec2 edge0, uvec2 edge1, uvec2 v)
+    static uvec2 Smoothstep(uvec2 edge0, uvec2 edge1, UInt32 v)
+    static uvec2 Smoothstep(uvec2 edge0, UInt32 edge1, uvec2 v)
+    static uvec2 Smoothstep(uvec2 edge0, UInt32 edge1, UInt32 v)
+    static uvec2 Smoothstep(UInt32 edge0, uvec2 edge1, uvec2 v)
+    static uvec2 Smoothstep(UInt32 edge0, uvec2 edge1, UInt32 v)
+    static uvec2 Smoothstep(UInt32 edge0, UInt32 edge1, uvec2 v)
+    static uvec2 Smoothstep(UInt32 edge0, UInt32 edge1, UInt32 v)
+    static uvec2 Smootherstep(uvec2 edge0, uvec2 edge1, uvec2 v)
+    static uvec2 Smootherstep(uvec2 edge0, uvec2 edge1, UInt32 v)
+    static uvec2 Smootherstep(uvec2 edge0, UInt32 edge1, uvec2 v)
+    static uvec2 Smootherstep(uvec2 edge0, UInt32 edge1, UInt32 v)
+    static uvec2 Smootherstep(UInt32 edge0, uvec2 edge1, uvec2 v)
+    static uvec2 Smootherstep(UInt32 edge0, uvec2 edge1, UInt32 v)
+    static uvec2 Smootherstep(UInt32 edge0, UInt32 edge1, uvec2 v)
+    static uvec2 Smootherstep(UInt32 edge0, UInt32 edge1, UInt32 v)
+    static uvec2 Fma(uvec2 a, uvec2 b, uvec2 c)
+    static uvec2 Fma(uvec2 a, uvec2 b, UInt32 c)
+    static uvec2 Fma(uvec2 a, UInt32 b, uvec2 c)
+    static uvec2 Fma(uvec2 a, UInt32 b, UInt32 c)
+    static uvec2 Fma(UInt32 a, uvec2 b, uvec2 c)
+    static uvec2 Fma(UInt32 a, uvec2 b, UInt32 c)
+    static uvec2 Fma(UInt32 a, UInt32 b, uvec2 c)
+    static uvec2 Fma(UInt32 a, UInt32 b, UInt32 c)
+    static uvec2 Add(uvec2 lhs, uvec2 rhs)
+    static uvec2 Add(uvec2 lhs, UInt32 rhs)
+    static uvec2 Add(UInt32 lhs, uvec2 rhs)
+    static uvec2 Add(UInt32 lhs, UInt32 rhs)
+    static uvec2 Sub(uvec2 lhs, uvec2 rhs)
+    static uvec2 Sub(uvec2 lhs, UInt32 rhs)
+    static uvec2 Sub(UInt32 lhs, uvec2 rhs)
+    static uvec2 Sub(UInt32 lhs, UInt32 rhs)
+    static uvec2 Mul(uvec2 lhs, uvec2 rhs)
+    static uvec2 Mul(uvec2 lhs, UInt32 rhs)
+    static uvec2 Mul(UInt32 lhs, uvec2 rhs)
+    static uvec2 Mul(UInt32 lhs, UInt32 rhs)
+    static uvec2 Div(uvec2 lhs, uvec2 rhs)
+    static uvec2 Div(uvec2 lhs, UInt32 rhs)
+    static uvec2 Div(UInt32 lhs, uvec2 rhs)
+    static uvec2 Div(UInt32 lhs, UInt32 rhs)
+    static uvec2 Xor(uvec2 lhs, uvec2 rhs)
+    static uvec2 Xor(uvec2 lhs, UInt32 rhs)
+    static uvec2 Xor(UInt32 lhs, uvec2 rhs)
+    static uvec2 Xor(UInt32 lhs, UInt32 rhs)
+    static uvec2 BitwiseOr(uvec2 lhs, uvec2 rhs)
+    static uvec2 BitwiseOr(uvec2 lhs, UInt32 rhs)
+    static uvec2 BitwiseOr(UInt32 lhs, uvec2 rhs)
+    static uvec2 BitwiseOr(UInt32 lhs, UInt32 rhs)
+    static uvec2 BitwiseAnd(uvec2 lhs, uvec2 rhs)
+    static uvec2 BitwiseAnd(uvec2 lhs, UInt32 rhs)
+    static uvec2 BitwiseAnd(UInt32 lhs, uvec2 rhs)
+    static uvec2 BitwiseAnd(UInt32 lhs, UInt32 rhs)
+    static uvec2 LeftShift(uvec2 lhs, ivec2 rhs)
+    static uvec2 LeftShift(uvec2 lhs, Int32 rhs)
+    static uvec2 LeftShift(UInt32 lhs, ivec2 rhs)
+    static uvec2 LeftShift(UInt32 lhs, Int32 rhs)
+    static uvec2 RightShift(uvec2 lhs, ivec2 rhs)
+    static uvec2 RightShift(uvec2 lhs, Int32 rhs)
+    static uvec2 RightShift(UInt32 lhs, ivec2 rhs)
+    static uvec2 RightShift(UInt32 lhs, Int32 rhs)
+    static uvec2 Random(Random random, uvec2 maxValue)
+    static uvec2 Random(Random random, UInt32 maxValue)
+    static uvec2 Random(Random random, uvec2 minValue, uvec2 maxValue)
+    static uvec2 Random(Random random, uvec2 minValue, UInt32 maxValue)
+    static uvec2 Random(Random random, UInt32 minValue, uvec2 maxValue)
+    static uvec2 Random(Random random, UInt32 minValue, UInt32 maxValue)
+    static uvec2 RandomUniform(Random random, uvec2 minValue, uvec2 maxValue)
+    static uvec2 RandomUniform(Random random, uvec2 minValue, UInt32 maxValue)
+    static uvec2 RandomUniform(Random random, UInt32 minValue, uvec2 maxValue)
+    static uvec2 RandomUniform(Random random, UInt32 minValue, UInt32 maxValue)
+    static uvec2 RandomPoisson(Random random, dvec2 lambda)
+    static uvec2 RandomPoisson(Random random, Double lambda)
+    static bvec2 op_LessThan(uvec2 lhs, uvec2 rhs)
+    static bvec2 op_LessThan(uvec2 lhs, UInt32 rhs)
+    static bvec2 op_LessThan(UInt32 lhs, uvec2 rhs)
+    static bvec2 op_LessThanOrEqual(uvec2 lhs, uvec2 rhs)
+    static bvec2 op_LessThanOrEqual(uvec2 lhs, UInt32 rhs)
+    static bvec2 op_LessThanOrEqual(UInt32 lhs, uvec2 rhs)
+    static bvec2 op_GreaterThan(uvec2 lhs, uvec2 rhs)
+    static bvec2 op_GreaterThan(uvec2 lhs, UInt32 rhs)
+    static bvec2 op_GreaterThan(UInt32 lhs, uvec2 rhs)
+    static bvec2 op_GreaterThanOrEqual(uvec2 lhs, uvec2 rhs)
+    static bvec2 op_GreaterThanOrEqual(uvec2 lhs, UInt32 rhs)
+    static bvec2 op_GreaterThanOrEqual(UInt32 lhs, uvec2 rhs)
+    static uvec2 op_Addition(uvec2 lhs, uvec2 rhs)
+    static uvec2 op_Addition(uvec2 lhs, UInt32 rhs)
+    static uvec2 op_Addition(UInt32 lhs, uvec2 rhs)
+    static uvec2 op_Subtraction(uvec2 lhs, uvec2 rhs)
+    static uvec2 op_Subtraction(uvec2 lhs, UInt32 rhs)
+    static uvec2 op_Subtraction(UInt32 lhs, uvec2 rhs)
+    static uvec2 op_Multiply(uvec2 lhs, uvec2 rhs)
+    static uvec2 op_Multiply(uvec2 lhs, UInt32 rhs)
+    static uvec2 op_Multiply(UInt32 lhs, uvec2 rhs)
+    static uvec2 op_Division(uvec2 lhs, uvec2 rhs)
+    static uvec2 op_Division(uvec2 lhs, UInt32 rhs)
+    static uvec2 op_Division(UInt32 lhs, uvec2 rhs)
+    static uvec2 op_UnaryPlus(uvec2 v)
+    static uvec2 op_OnesComplement(uvec2 v)
+    static uvec2 op_ExclusiveOr(uvec2 lhs, uvec2 rhs)
+    static uvec2 op_ExclusiveOr(uvec2 lhs, UInt32 rhs)
+    static uvec2 op_ExclusiveOr(UInt32 lhs, uvec2 rhs)
+    static uvec2 op_BitwiseOr(uvec2 lhs, uvec2 rhs)
+    static uvec2 op_BitwiseOr(uvec2 lhs, UInt32 rhs)
+    static uvec2 op_BitwiseOr(UInt32 lhs, uvec2 rhs)
+    static uvec2 op_BitwiseAnd(uvec2 lhs, uvec2 rhs)
+    static uvec2 op_BitwiseAnd(uvec2 lhs, UInt32 rhs)
+    static uvec2 op_BitwiseAnd(UInt32 lhs, uvec2 rhs)
+    static uvec2 op_LeftShift(uvec2 lhs, Int32 rhs)
+    static uvec2 op_RightShift(uvec2 lhs, Int32 rhs)
+    ctor(UInt32 x, UInt32 y)
+    ctor(UInt32 v)
+    ctor(uvec2 v)
+    ctor(uvec3 v)
+    ctor(uvec4 v)
+    ctor(IReadOnlyList`1 v)
+    ctor(Object[] v)
+    ctor(UInt32[] v)
+    ctor(UInt32[] v, Int32 startIndex)
+    ctor(IEnumerable`1 v)
+=== GlmSharp.ivec2  [struct] ===
+    field Int32 x
+    field Int32 y
+    prop Int32 Item { get:True set:True }
+    prop swizzle_ivec2 swizzle { get:True set:False }
+    prop ivec2 xy { get:True set:True }
+    prop ivec2 rg { get:True set:True }
+    prop Int32 r { get:True set:True }
+    prop Int32 g { get:True set:True }
+    prop Int32[] Values { get:True set:False }
+    prop Int32 Count { get:True set:False }
+    prop Int32 MinElement { get:True set:False }
+    prop Int32 MaxElement { get:True set:False }
+    prop Single Length { get:True set:False }
+    prop Single LengthSqr { get:True set:False }
+    prop Int32 Sum { get:True set:False }
+    prop Single Norm { get:True set:False }
+    prop Single Norm1 { get:True set:False }
+    prop Single Norm2 { get:True set:False }
+    prop Single NormMax { get:True set:False }
+    prop ivec2 Zero { get:True set:False }
+    prop ivec2 Ones { get:True set:False }
+    prop ivec2 UnitX { get:True set:False }
+    prop ivec2 UnitY { get:True set:False }
+    prop ivec2 MaxValue { get:True set:False }
+    prop ivec2 MinValue { get:True set:False }
+    static lvec2 op_Implicit(ivec2 v)
+    static vec2 op_Implicit(ivec2 v)
+    static hvec2 op_Implicit(ivec2 v)
+    static dvec2 op_Implicit(ivec2 v)
+    static decvec2 op_Implicit(ivec2 v)
+    static cvec2 op_Implicit(ivec2 v)
+    static ivec3 op_Explicit(ivec2 v)
+    static ivec4 op_Explicit(ivec2 v)
+    static uvec2 op_Explicit(ivec2 v)
+    static uvec3 op_Explicit(ivec2 v)
+    static uvec4 op_Explicit(ivec2 v)
+    static vec3 op_Explicit(ivec2 v)
+    static vec4 op_Explicit(ivec2 v)
+    static hvec3 op_Explicit(ivec2 v)
+    static hvec4 op_Explicit(ivec2 v)
+    static dvec3 op_Explicit(ivec2 v)
+    static dvec4 op_Explicit(ivec2 v)
+    static decvec3 op_Explicit(ivec2 v)
+    static decvec4 op_Explicit(ivec2 v)
+    static cvec3 op_Explicit(ivec2 v)
+    static cvec4 op_Explicit(ivec2 v)
+    static lvec3 op_Explicit(ivec2 v)
+    static lvec4 op_Explicit(ivec2 v)
+    static bvec2 op_Explicit(ivec2 v)
+    static bvec3 op_Explicit(ivec2 v)
+    static bvec4 op_Explicit(ivec2 v)
+    static Int32[] op_Explicit(ivec2 v)
+    static Object[] op_Explicit(ivec2 v)
+    static ivec2 get_Zero()
+    static ivec2 get_Ones()
+    static ivec2 get_UnitX()
+    static ivec2 get_UnitY()
+    static ivec2 get_MaxValue()
+    static ivec2 get_MinValue()
+    static Boolean op_Equality(ivec2 lhs, ivec2 rhs)
+    static Boolean op_Inequality(ivec2 lhs, ivec2 rhs)
+    static ivec2 Parse(String s)
+    static ivec2 Parse(String s, String sep)
+    static ivec2 Parse(String s, String sep, IFormatProvider provider)
+    static ivec2 Parse(String s, String sep, NumberStyles style)
+    static ivec2 Parse(String s, String sep, NumberStyles style, IFormatProvider provider)
+    static Boolean TryParse(String s, ref ivec2& result)
+    static Boolean TryParse(String s, String sep, ref ivec2& result)
+    static Boolean TryParse(String s, String sep, NumberStyles style, IFormatProvider provider, ref ivec2& result)
+    static imat2 OuterProduct(ivec2 c, ivec2 r)
+    static imat2x3 OuterProduct(ivec3 c, ivec2 r)
+    static imat3x2 OuterProduct(ivec2 c, ivec3 r)
+    static imat2x4 OuterProduct(ivec4 c, ivec2 r)
+    static imat4x2 OuterProduct(ivec2 c, ivec4 r)
+    static Int32 Dot(ivec2 lhs, ivec2 rhs)
+    static Single Distance(ivec2 lhs, ivec2 rhs)
+    static Single DistanceSqr(ivec2 lhs, ivec2 rhs)
+    static ivec2 Reflect(ivec2 I, ivec2 N)
+    static ivec2 Refract(ivec2 I, ivec2 N, Int32 eta)
+    static ivec2 FaceForward(ivec2 N, ivec2 I, ivec2 Nref)
+    static Int32 Cross(ivec2 l, ivec2 r)
+    static ivec2 Random(Random random)
+    static bvec2 Equal(ivec2 lhs, ivec2 rhs)
+    static bvec2 Equal(ivec2 lhs, Int32 rhs)
+    static bvec2 Equal(Int32 lhs, ivec2 rhs)
+    static bvec2 Equal(Int32 lhs, Int32 rhs)
+    static bvec2 NotEqual(ivec2 lhs, ivec2 rhs)
+    static bvec2 NotEqual(ivec2 lhs, Int32 rhs)
+    static bvec2 NotEqual(Int32 lhs, ivec2 rhs)
+    static bvec2 NotEqual(Int32 lhs, Int32 rhs)
+    static bvec2 GreaterThan(ivec2 lhs, ivec2 rhs)
+    static bvec2 GreaterThan(ivec2 lhs, Int32 rhs)
+    static bvec2 GreaterThan(Int32 lhs, ivec2 rhs)
+    static bvec2 GreaterThan(Int32 lhs, Int32 rhs)
+    static bvec2 GreaterThanEqual(ivec2 lhs, ivec2 rhs)
+    static bvec2 GreaterThanEqual(ivec2 lhs, Int32 rhs)
+    static bvec2 GreaterThanEqual(Int32 lhs, ivec2 rhs)
+    static bvec2 GreaterThanEqual(Int32 lhs, Int32 rhs)
+    static bvec2 LesserThan(ivec2 lhs, ivec2 rhs)
+    static bvec2 LesserThan(ivec2 lhs, Int32 rhs)
+    static bvec2 LesserThan(Int32 lhs, ivec2 rhs)
+    static bvec2 LesserThan(Int32 lhs, Int32 rhs)
+    static bvec2 LesserThanEqual(ivec2 lhs, ivec2 rhs)
+    static bvec2 LesserThanEqual(ivec2 lhs, Int32 rhs)
+    static bvec2 LesserThanEqual(Int32 lhs, ivec2 rhs)
+    static bvec2 LesserThanEqual(Int32 lhs, Int32 rhs)
+    static ivec2 Abs(ivec2 v)
+    static ivec2 Abs(Int32 v)
+    static ivec2 HermiteInterpolationOrder3(ivec2 v)
+    static ivec2 HermiteInterpolationOrder3(Int32 v)
+    static ivec2 HermiteInterpolationOrder5(ivec2 v)
+    static ivec2 HermiteInterpolationOrder5(Int32 v)
+    static ivec2 Sqr(ivec2 v)
+    static ivec2 Sqr(Int32 v)
+    static ivec2 Pow2(ivec2 v)
+    static ivec2 Pow2(Int32 v)
+    static ivec2 Pow3(ivec2 v)
+    static ivec2 Pow3(Int32 v)
+    static ivec2 Step(ivec2 v)
+    static ivec2 Step(Int32 v)
+    static ivec2 Sqrt(ivec2 v)
+    static ivec2 Sqrt(Int32 v)
+    static ivec2 InverseSqrt(ivec2 v)
+    static ivec2 InverseSqrt(Int32 v)
+    static ivec2 Sign(ivec2 v)
+    static ivec2 Sign(Int32 v)
+    static ivec2 Max(ivec2 lhs, ivec2 rhs)
+    static ivec2 Max(ivec2 lhs, Int32 rhs)
+    static ivec2 Max(Int32 lhs, ivec2 rhs)
+    static ivec2 Max(Int32 lhs, Int32 rhs)
+    static ivec2 Min(ivec2 lhs, ivec2 rhs)
+    static ivec2 Min(ivec2 lhs, Int32 rhs)
+    static ivec2 Min(Int32 lhs, ivec2 rhs)
+    static ivec2 Min(Int32 lhs, Int32 rhs)
+    static ivec2 Pow(ivec2 lhs, ivec2 rhs)
+    static ivec2 Pow(ivec2 lhs, Int32 rhs)
+    static ivec2 Pow(Int32 lhs, ivec2 rhs)
+    static ivec2 Pow(Int32 lhs, Int32 rhs)
+    static ivec2 Log(ivec2 lhs, ivec2 rhs)
+    static ivec2 Log(ivec2 lhs, Int32 rhs)
+    static ivec2 Log(Int32 lhs, ivec2 rhs)
+    static ivec2 Log(Int32 lhs, Int32 rhs)
+    static ivec2 Clamp(ivec2 v, ivec2 min, ivec2 max)
+    static ivec2 Clamp(ivec2 v, ivec2 min, Int32 max)
+    static ivec2 Clamp(ivec2 v, Int32 min, ivec2 max)
+    static ivec2 Clamp(ivec2 v, Int32 min, Int32 max)
+    static ivec2 Clamp(Int32 v, ivec2 min, ivec2 max)
+    static ivec2 Clamp(Int32 v, ivec2 min, Int32 max)
+    static ivec2 Clamp(Int32 v, Int32 min, ivec2 max)
+    static ivec2 Clamp(Int32 v, Int32 min, Int32 max)
+    static ivec2 Mix(ivec2 min, ivec2 max, ivec2 a)
+    static ivec2 Mix(ivec2 min, ivec2 max, Int32 a)
+    static ivec2 Mix(ivec2 min, Int32 max, ivec2 a)
+    static ivec2 Mix(ivec2 min, Int32 max, Int32 a)
+    static ivec2 Mix(Int32 min, ivec2 max, ivec2 a)
+    static ivec2 Mix(Int32 min, ivec2 max, Int32 a)
+    static ivec2 Mix(Int32 min, Int32 max, ivec2 a)
+    static ivec2 Mix(Int32 min, Int32 max, Int32 a)
+    static ivec2 Lerp(ivec2 min, ivec2 max, ivec2 a)
+    static ivec2 Lerp(ivec2 min, ivec2 max, Int32 a)
+    static ivec2 Lerp(ivec2 min, Int32 max, ivec2 a)
+    static ivec2 Lerp(ivec2 min, Int32 max, Int32 a)
+    static ivec2 Lerp(Int32 min, ivec2 max, ivec2 a)
+    static ivec2 Lerp(Int32 min, ivec2 max, Int32 a)
+    static ivec2 Lerp(Int32 min, Int32 max, ivec2 a)
+    static ivec2 Lerp(Int32 min, Int32 max, Int32 a)
+    static ivec2 Smoothstep(ivec2 edge0, ivec2 edge1, ivec2 v)
+    static ivec2 Smoothstep(ivec2 edge0, ivec2 edge1, Int32 v)
+    static ivec2 Smoothstep(ivec2 edge0, Int32 edge1, ivec2 v)
+    static ivec2 Smoothstep(ivec2 edge0, Int32 edge1, Int32 v)
+    static ivec2 Smoothstep(Int32 edge0, ivec2 edge1, ivec2 v)
+    static ivec2 Smoothstep(Int32 edge0, ivec2 edge1, Int32 v)
+    static ivec2 Smoothstep(Int32 edge0, Int32 edge1, ivec2 v)
+    static ivec2 Smoothstep(Int32 edge0, Int32 edge1, Int32 v)
+    static ivec2 Smootherstep(ivec2 edge0, ivec2 edge1, ivec2 v)
+    static ivec2 Smootherstep(ivec2 edge0, ivec2 edge1, Int32 v)
+    static ivec2 Smootherstep(ivec2 edge0, Int32 edge1, ivec2 v)
+    static ivec2 Smootherstep(ivec2 edge0, Int32 edge1, Int32 v)
+    static ivec2 Smootherstep(Int32 edge0, ivec2 edge1, ivec2 v)
+    static ivec2 Smootherstep(Int32 edge0, ivec2 edge1, Int32 v)
+    static ivec2 Smootherstep(Int32 edge0, Int32 edge1, ivec2 v)
+    static ivec2 Smootherstep(Int32 edge0, Int32 edge1, Int32 v)
+    static ivec2 Fma(ivec2 a, ivec2 b, ivec2 c)
+    static ivec2 Fma(ivec2 a, ivec2 b, Int32 c)
+    static ivec2 Fma(ivec2 a, Int32 b, ivec2 c)
+    static ivec2 Fma(ivec2 a, Int32 b, Int32 c)
+    static ivec2 Fma(Int32 a, ivec2 b, ivec2 c)
+    static ivec2 Fma(Int32 a, ivec2 b, Int32 c)
+    static ivec2 Fma(Int32 a, Int32 b, ivec2 c)
+    static ivec2 Fma(Int32 a, Int32 b, Int32 c)
+    static ivec2 Add(ivec2 lhs, ivec2 rhs)
+    static ivec2 Add(ivec2 lhs, Int32 rhs)
+    static ivec2 Add(Int32 lhs, ivec2 rhs)
+    static ivec2 Add(Int32 lhs, Int32 rhs)
+    static ivec2 Sub(ivec2 lhs, ivec2 rhs)
+    static ivec2 Sub(ivec2 lhs, Int32 rhs)
+    static ivec2 Sub(Int32 lhs, ivec2 rhs)
+    static ivec2 Sub(Int32 lhs, Int32 rhs)
+    static ivec2 Mul(ivec2 lhs, ivec2 rhs)
+    static ivec2 Mul(ivec2 lhs, Int32 rhs)
+    static ivec2 Mul(Int32 lhs, ivec2 rhs)
+    static ivec2 Mul(Int32 lhs, Int32 rhs)
+    static ivec2 Div(ivec2 lhs, ivec2 rhs)
+    static ivec2 Div(ivec2 lhs, Int32 rhs)
+    static ivec2 Div(Int32 lhs, ivec2 rhs)
+    static ivec2 Div(Int32 lhs, Int32 rhs)
+    static ivec2 Xor(ivec2 lhs, ivec2 rhs)
+    static ivec2 Xor(ivec2 lhs, Int32 rhs)
+    static ivec2 Xor(Int32 lhs, ivec2 rhs)
+    static ivec2 Xor(Int32 lhs, Int32 rhs)
+    static ivec2 BitwiseOr(ivec2 lhs, ivec2 rhs)
+    static ivec2 BitwiseOr(ivec2 lhs, Int32 rhs)
+    static ivec2 BitwiseOr(Int32 lhs, ivec2 rhs)
+    static ivec2 BitwiseOr(Int32 lhs, Int32 rhs)
+    static ivec2 BitwiseAnd(ivec2 lhs, ivec2 rhs)
+    static ivec2 BitwiseAnd(ivec2 lhs, Int32 rhs)
+    static ivec2 BitwiseAnd(Int32 lhs, ivec2 rhs)
+    static ivec2 BitwiseAnd(Int32 lhs, Int32 rhs)
+    static ivec2 LeftShift(ivec2 lhs, ivec2 rhs)
+    static ivec2 LeftShift(ivec2 lhs, Int32 rhs)
+    static ivec2 LeftShift(Int32 lhs, ivec2 rhs)
+    static ivec2 LeftShift(Int32 lhs, Int32 rhs)
+    static ivec2 RightShift(ivec2 lhs, ivec2 rhs)
+    static ivec2 RightShift(ivec2 lhs, Int32 rhs)
+    static ivec2 RightShift(Int32 lhs, ivec2 rhs)
+    static ivec2 RightShift(Int32 lhs, Int32 rhs)
+    static ivec2 Random(Random random, ivec2 maxValue)
+    static ivec2 Random(Random random, Int32 maxValue)
+    static ivec2 Random(Random random, ivec2 minValue, ivec2 maxValue)
+    static ivec2 Random(Random random, ivec2 minValue, Int32 maxValue)
+    static ivec2 Random(Random random, Int32 minValue, ivec2 maxValue)
+    static ivec2 Random(Random random, Int32 minValue, Int32 maxValue)
+    static ivec2 RandomUniform(Random random, ivec2 minValue, ivec2 maxValue)
+    static ivec2 RandomUniform(Random random, ivec2 minValue, Int32 maxValue)
+    static ivec2 RandomUniform(Random random, Int32 minValue, ivec2 maxValue)
+    static ivec2 RandomUniform(Random random, Int32 minValue, Int32 maxValue)
+    static ivec2 RandomPoisson(Random random, dvec2 lambda)
+    static ivec2 RandomPoisson(Random random, Double lambda)
+    static bvec2 op_LessThan(ivec2 lhs, ivec2 rhs)
+    static bvec2 op_LessThan(ivec2 lhs, Int32 rhs)
+    static bvec2 op_LessThan(Int32 lhs, ivec2 rhs)
+    static bvec2 op_LessThanOrEqual(ivec2 lhs, ivec2 rhs)
+    static bvec2 op_LessThanOrEqual(ivec2 lhs, Int32 rhs)
+    static bvec2 op_LessThanOrEqual(Int32 lhs, ivec2 rhs)
+    static bvec2 op_GreaterThan(ivec2 lhs, ivec2 rhs)
+    static bvec2 op_GreaterThan(ivec2 lhs, Int32 rhs)
+    static bvec2 op_GreaterThan(Int32 lhs, ivec2 rhs)
+    static bvec2 op_GreaterThanOrEqual(ivec2 lhs, ivec2 rhs)
+    static bvec2 op_GreaterThanOrEqual(ivec2 lhs, Int32 rhs)
+    static bvec2 op_GreaterThanOrEqual(Int32 lhs, ivec2 rhs)
+    static ivec2 op_Addition(ivec2 lhs, ivec2 rhs)
+    static ivec2 op_Addition(ivec2 lhs, Int32 rhs)
+    static ivec2 op_Addition(Int32 lhs, ivec2 rhs)
+    static ivec2 op_Subtraction(ivec2 lhs, ivec2 rhs)
+    static ivec2 op_Subtraction(ivec2 lhs, Int32 rhs)
+    static ivec2 op_Subtraction(Int32 lhs, ivec2 rhs)
+    static ivec2 op_Multiply(ivec2 lhs, ivec2 rhs)
+    static ivec2 op_Multiply(ivec2 lhs, Int32 rhs)
+    static ivec2 op_Multiply(Int32 lhs, ivec2 rhs)
+    static ivec2 op_Division(ivec2 lhs, ivec2 rhs)
+    static ivec2 op_Division(ivec2 lhs, Int32 rhs)
+    static ivec2 op_Division(Int32 lhs, ivec2 rhs)
+    static ivec2 op_UnaryPlus(ivec2 v)
+    static ivec2 op_UnaryNegation(ivec2 v)
+    static ivec2 op_OnesComplement(ivec2 v)
+    static ivec2 op_ExclusiveOr(ivec2 lhs, ivec2 rhs)
+    static ivec2 op_ExclusiveOr(ivec2 lhs, Int32 rhs)
+    static ivec2 op_ExclusiveOr(Int32 lhs, ivec2 rhs)
+    static ivec2 op_BitwiseOr(ivec2 lhs, ivec2 rhs)
+    static ivec2 op_BitwiseOr(ivec2 lhs, Int32 rhs)
+    static ivec2 op_BitwiseOr(Int32 lhs, ivec2 rhs)
+    static ivec2 op_BitwiseAnd(ivec2 lhs, ivec2 rhs)
+    static ivec2 op_BitwiseAnd(ivec2 lhs, Int32 rhs)
+    static ivec2 op_BitwiseAnd(Int32 lhs, ivec2 rhs)
+    static ivec2 op_LeftShift(ivec2 lhs, Int32 rhs)
+    static ivec2 op_RightShift(ivec2 lhs, Int32 rhs)
+    ctor(Int32 x, Int32 y)
+    ctor(Int32 v)
+    ctor(ivec2 v)
+    ctor(ivec3 v)
+    ctor(ivec4 v)
+    ctor(IReadOnlyList`1 v)
+    ctor(Object[] v)
+    ctor(Int32[] v)
+    ctor(Int32[] v, Int32 startIndex)
+    ctor(IEnumerable`1 v)

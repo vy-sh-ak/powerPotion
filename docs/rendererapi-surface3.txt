@@ -1,0 +1,130 @@
+=== Enscape.RendererApi.CameraTransitionFlags [enum] ===
+    NONE = 0
+    SET_FLY_MODE = 1
+    FLY_TO_TARGET = 2
+    OPTIONAL_FLY_TO_TARGET = 4
+    ASSUME_DEFAULT_POSITION = 8
+    NO_HOME_POSITION = 16
+=== Enscape.RendererApi.RpcPlacementFlags [enum] ===
+    FIT_AABB = 1
+=== Enscape.RendererApi.ModelRpcParams [struct] ===
+    field Single[] BbSize
+    field Single HeightInFeet
+    field RpcPlacementFlags PlacementFlags
+    field UInt64 FamilyClass
+    field Byte[] ReplacedContentFilename
+    field Byte[] RpcGuid
+    field Boolean IsWhiteMode
+    static FromRpcData
+=== Enscape.RendererApi.RendererSettingFlags [enum] ===
+    NONE = 0
+    HARDWARE_RAYTRACING = 1
+    RT_SUN_SHADOWS = 2
+    RT_ARTIFICIAL_LIGHTS = 4
+    GRASS_CARPET = 8
+=== Enscape.RendererApi.RendererSettings [struct] ===
+=== Enscape.RendererApi.EnscapeAPI+CallbackProcExt [struct] ===
+    Void Invoke(Int32, System.String)
+    System.IAsyncResult BeginInvoke(Int32, System.String, System.AsyncCallback, System.Object)
+    Void EndInvoke(System.IAsyncResult)
+=== Enscape.RendererApi.EnscapeAPI+EnscapeCallbackProcProgress [struct] ===
+    Void Invoke(Single)
+    System.IAsyncResult BeginInvoke(Single, System.AsyncCallback, System.Object)
+    Void EndInvoke(System.IAsyncResult)
+=== Enscape.RendererApi.EnscapeAPI+EnscapeCallbackDateParamsChange [struct] ===
+    Void Invoke(TimeData)
+    System.IAsyncResult BeginInvoke(TimeData, System.AsyncCallback, System.Object)
+    Void EndInvoke(System.IAsyncResult)
+=== Enscape.RendererApi.EnscapeAPI+LightDistribution [enum] ===
+    SPHERICAL = 1
+    HEMISPHERICAL = 2
+    SPOT = 3
+=== Enscape.RendererApi.EnscapeAPI+LightShape [enum] ===
+    POINT = 1
+    LINE = 2
+    RECT = 3
+    CIRCLE = 4
+=== Enscape.RendererApi.EnscapeAPI+SoundSourceParams [struct] ===
+    field Int32 id
+    field String file
+    field Single x
+    field Single y
+    field Single z
+    field UInt32 maxVol
+    field Single minDist
+    field Single maxDist
+=== Enscape.RendererApi.EnscapeAPI+SunMode [enum] ===
+    DATE = 0
+    VECTOR = 1
+    UNDEFINED = -1
+=== Enscape.RendererApi.EnscapeAPI+CameraFlags [enum] ===
+    POSITION = 1
+    ORIENTATION = 2
+    FOV = 4
+    RESOLUTION = 8
+    DOF_AUTOFOCUS = 16
+    DOF_AMOUNT = 32
+    DOF_DISTANCE = 64
+    AUTOEXPOSURE = 128
+    EXPOSURE = 256
+    TWO_POINT = 512
+    PROJECTION_TYPE = 1024
+    ORTHO_WINDOW = 2048
+    GLOBAL_BBOX_VIEW = 4096
+=== Enscape.RendererApi.EnscapeAPI+FovType [enum] ===
+    HORIZONTAL = 0
+    VERTICAL = 1
+=== Enscape.RendererApi.EnscapeAPI+ProjectionType [enum] ===
+    PERSPECTIVE = 0
+    ORTHO = 1
+=== Enscape.RendererApi.EnscapeAPI+GlobalBBoxView [enum] ===
+    BACK = 0
+    RIGHT = 1
+    FRONT = 2
+    LEFT = 3
+    TOP = 4
+=== Enscape.RendererApi.EnscapeAPI+CameraParams [struct] ===
+    field CameraFlags <ActiveFields>k__BackingField
+    field vec3 position
+    field quat orientation
+    field Single fov
+    field FovType fovType
+    field uvec2 resolution
+    field Single dofAmount
+    field Single dofDistance
+    field Boolean dofAutoFocus
+    field Single exposure
+    field Boolean autoExposure
+    field Boolean twoPoint
+    field ProjectionType projectionType
+    field vec4 orthoWindow
+    field GlobalBBoxView globalBBoxView
+=== Enscape.RendererApi.TextureSlotParams+SlotSource [enum] ===
+    TEXTURE_SLOT_SOURCE_DEFAULT = 0
+    FROM_RGB = 1
+    FROM_RGBA = 2
+    FROM_R = 3
+    FROM_G = 4
+    FROM_B = 5
+    FROM_A = 6
+    TEXTURE_SLOT_SOURCE_COUNT = 7
+=== Enscape.RendererApi.TextureSlotParams+WcsType [enum] ===
+    NONE = 0
+    PLANAR = 1
+    BOX = 2
+CameraParams size: 88
+    CameraFlags <ActiveFields>k__BackingField (offset )
+    vec3 position (offset )
+    quat orientation (offset )
+    Single fov (offset )
+    FovType fovType (offset )
+    uvec2 resolution (offset )
+    Single dofAmount (offset )
+    Single dofDistance (offset )
+    Boolean dofAutoFocus (offset )
+    Single exposure (offset )
+    Boolean autoExposure (offset )
+    Boolean twoPoint (offset )
+    ProjectionType projectionType (offset )
+    vec4 orthoWindow (offset )
+    GlobalBBoxView globalBBoxView (offset )

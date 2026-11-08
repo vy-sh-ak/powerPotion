@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <Version>1.0.0</Version>
+    <AssemblyTitle>PowerPotion for Revit</AssemblyTitle>
+    <Product>PowerPotion</Product>
+    <PlatformTarget>x64</PlatformTarget>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Revit add-in: the host (Revit) supplies RevitAPI; never copy it -->
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <AppendRuntimeManifestToOutput>false</AppendRuntimeManifestToOutput>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <NoWarn>$(NoWarn);NU1701</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PowerPotion.Protocol\PowerPotion.Protocol.csproj">
+      <Private>true</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="RevitAPI">
+      <HintPath>$(RevitDir)\RevitAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="RevitAPIUI">
+      <HintPath>$(RevitDir)\RevitAPIUI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+
+  <!-- install the .addin manifest next to the output -->
+  <ItemGroup>
+    <None Include="PowerPotion.addin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>  <Target Name="EnsureRevitApi" BeforeTargets="ResolveAssemblyReferences">
+    <Error Text="RevitAPI.dll not found. Set RevitDir to the Revit 2026 install directory." Condition="!Exists('$(RevitDir)\RevitAPI.dll')" />
+  </Target>
+</Project>
