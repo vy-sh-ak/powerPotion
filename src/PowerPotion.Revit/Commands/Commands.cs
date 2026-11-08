@@ -61,6 +61,22 @@ public sealed class PauseLiveCommand : IExternalCommand
 }
 
 [Transaction(TransactionMode.Manual)]
+public sealed class RefreshCommand : IExternalCommand
+{
+    public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
+    {
+        var sync = PowerPotionApp.Instance?.GetOrCreateSync(commandData.Application);
+        if (sync?.IsRunning != true)
+        {
+            TaskDialog.Show("PowerPotion", "Start the live render first.");
+            return Result.Succeeded;
+        }
+        sync.Refresh();
+        return Result.Succeeded;
+    }
+}
+
+[Transaction(TransactionMode.Manual)]
 public sealed class ScreenshotCommand : IExternalCommand
 {
     public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
@@ -124,8 +140,8 @@ public sealed class AboutCommand : IExternalCommand
     public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)
     {
         TaskDialog.Show("PowerPotion 1.0",
-            "PowerPotion — a personalized real-time rendering companion for Revit.\n\n" +
-            "Reuses the rendering engine of your installed Enscape product at runtime.\n" +
+            "PowerPotion - a personalized real-time rendering companion for Revit.\n\n" +
+            "Powered by a high-performance real-time rendering engine.\n" +
             "No VR, no accounts, no license or telemetry code.\n\n" +
             "See docs/ARCHITECTURE.md in the repository for the reverse-engineering notes.");
         return Result.Succeeded;

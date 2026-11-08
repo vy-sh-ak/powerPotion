@@ -38,8 +38,8 @@ public static class Program
         var enscapeDir = EnscapeLocator.FindRendererHostDir();
         if (enscapeDir == null)
         {
-            Console.Error.WriteLine("PowerPotion: no Enscape installation found. " +
-                "Install Enscape or set POWERPOTION_ENSCAPE_DIR to its RendererHost directory.");
+            Console.Error.WriteLine("PowerPotion: no compatible renderer installation found. " +
+                "Install the renderer or set POWERPOTION_ENSCAPE_DIR to its RendererHost directory.");
             return 3;
         }
 

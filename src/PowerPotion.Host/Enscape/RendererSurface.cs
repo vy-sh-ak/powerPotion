@@ -200,7 +200,7 @@ public sealed class RendererSurface : HwndHost
             // completes and we reparent it (a background timer keeps hiding it while the UI thread is
             // blocked inside the native start call).
             _suppressEngineWindow = true;
-            _hideTimer = new System.Threading.Timer(_ => HideEngineWindows(), null, 0, 100);
+            _hideTimer = new System.Threading.Timer(_ => HideEngineWindows(), null, 0, 25);
 
             var result = _engine.StartRendererNative(topLevel, -32000, -32000, w, h);
             if (global::Enscape.RendererApi.EnscapeAPI.IsError(result))
@@ -322,6 +322,8 @@ public sealed class RendererSurface : HwndHost
     }
 
     /// <summary>Reveals the renderer once the first scene (or a standalone session) has been committed.</summary>
+    public bool IsEngineWindowShown => _engineWindowShown;
+
     public void ShowEngineWindow()
     {
         if (_engineWindowShown) return;

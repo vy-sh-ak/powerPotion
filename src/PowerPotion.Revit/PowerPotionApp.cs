@@ -106,6 +106,11 @@ public sealed class PowerPotionApp : IExternalApplication
             typeof(PauseLiveCommand).FullName),
             "Pause/resume pushing model changes to the renderer.", "pause");
 
+        AddButton(panelControl, new PushButtonData(
+            "PowerPotionRefresh", "Refresh", assemblyPath,
+            typeof(RefreshCommand).FullName),
+            "Re-export the current Revit view now (updates are debounced by default).", "refresh");
+
         AddButton(panelTools, new PushButtonData(
             "PowerPotionScreenshot", "Capture\nImage", assemblyPath,
             typeof(ScreenshotCommand).FullName),
@@ -119,7 +124,7 @@ public sealed class PowerPotionApp : IExternalApplication
         AddButton(panelTools, new PushButtonData(
             "PowerPotionMaterials", "Material\nEditor", assemblyPath,
             typeof(MaterialEditorCommand).FullName),
-            "Edit Enscape-style material overrides for the current document.", "material");
+            "Edit PowerPotion material overrides for the current document.", "material");
 
         AddButton(panelTools, new PushButtonData(
             "PowerPotionSun", "Sun &&\nLocation", assemblyPath,

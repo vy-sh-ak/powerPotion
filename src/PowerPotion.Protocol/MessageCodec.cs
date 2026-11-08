@@ -102,6 +102,7 @@ public static class MessageCodec
     {
         var world = new WorldSnapshot
         {
+            Revision = r.ReadLong(),
             DocumentName = r.ReadString(),
             ViewName = r.ReadString(),
         };
@@ -207,6 +208,7 @@ public static class MessageCodec
 
     public static void WriteWorld(ProtocolWriter w, WorldSnapshot world)
     {
+        w.Write(world.Revision);
         w.Write(world.DocumentName);
         w.Write(world.ViewName);
 

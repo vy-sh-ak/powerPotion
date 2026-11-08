@@ -139,6 +139,36 @@ the decompiled Revit plugin, and controlled renders on the installed engine:
   automated testing of the camera path (used by `tests/PowerPotion.SmokeTest`, including a
   `--real-input` mode that injects real `W`/left-drag/wheel events with `SendInput`).
 
+## Materials
+
+Revit appearance assets use one schema per material family; the diffuse/albedo bitmap is connected
+to the **schema's albedo property**, not always to `generic_diffuse`. `RevitMaterialParser` maps each
+observed schema to its albedo property using the literals from Enscape's `MaterialParser`
+(REA Evidence `ev_21cf950919b02dbddc9127eb00780815fce66e449b13fc0ebab82738322e1de4`; parent
+`ev_d6e7aea05573553a7661e2433e87523a3cf608160e6a25fd0e2b40e6f65bf1e9`):
+
+| Schema | Albedo property |
+|---|---|
+| `GenericSchema` | `generic_diffuse` |
+| `MasonryCMUSchema` | `masonrycmu_color` |
+| `CeramicSchema` / `ConcreteSchema` / `HardwoodSchema` | `ceramic_color` / `concrete_color` / `hardwood_color` |
+| `MetallicPaintSchema` / `MetalSchema` / `MirrorSchema` | `metallicpaint_base_color` / `metal_color` / `mirror_tintcolor` |
+| `PlasticVinylSchema` / `StoneSchema` / `WallPaintSchema` / `GlazingSchema` | `plasticvinyl_color` / `stone_color` / `wallpaint_color` / `glazing_transmittance_color` |
+| `PrismOpaque/Transparent/Layered/Metal/Glazing` | `opaque_albedo` / `transparent_color` / `layered_diffuse` / `metal_f0` / `glazing_transmission_color` |
+
+Textures are read exactly like Enscape's `ParseTexture`: `unifiedbitmap_Bitmap` (connected asset),
+`unifiedbitmap_RGBAmount`, `unifiedbitmap_Invert`, and the `texture_*` / `unifiedbitmap_*` scale,
+offset and angle aliases; the angle is degrees → radians. Bitmap paths are resolved with a
+Revit-FileLocator-style search (Revit.ini `MaterialLibraryFiles` / `AdditionalRenderAppearancePaths`,
+`%ProgramData%\Autodesk\RVT *\Materials{1,2,3}`, `Program Files\Common Files\Autodesk Shared\Materials`,
+the document folder) plus a filename index fallback for library-relative paths. Paint/view overrides
+are resolved **inside `OnMaterial`** (`MaterialNode.HasOverriddenAppearance` / `GetAppearanceOverride()`):
+`MaterialNode` is a transient wrapper and using it later in `OnPolymesh` throws and drops the
+geometry, so the resulting `MaterialDto` is cached for the face. The 16/32 texture UV transform
+defaults to identity (not a zero matrix). Every parsed material is logged to `revit-sync.log`
+(`... schema=... rgb=... tex='...'`), and unresolved bitmaps log
+`texture unresolved on '<property>': raw='...'`.
+
 ## Branding & theme
 
 The potion mark and the dark-purple theme are generated from one vector definition
@@ -159,9 +189,16 @@ The host WPF window uses the same palette (deep violet `#140B22` / `#1E1230`, ac
 * **No Enscape splash**: the engine window is created far off-screen (`-32000, -32000`) and a
   watchdog hides every native window of class `Enscape` (top-level *and* child windows — some builds
   parent the loading screen to the host). The watchdog stays active with the session, but skips the
-  single embedded render window once it is revealed. That reveal happens only when the first world
-  commits (never on "renderer ready"), because until it has a scene the engine paints its own
-  "Enscape 4.7.0" splash inside that window. The branded splash closes at the same moment.
+  single embedded render window once it is revealed. That reveal happens after the first world commits
+  **and a one-second settle delay** (never on "renderer ready"), because until it has a scene the
+  engine paints its own "chaos Enscape Loading …" screen inside that window. The branded splash stays
+  on top during the delay and closes when the renderer is revealed.
+* **Responsive splash / no busy cursor**: `SplashPresenter` runs the branded `SplashWindow` on its own
+  STA UI thread, and the main window starts off-screen with no taskbar entry. `StartRendererNative`
+  blocks the main UI thread for several seconds by design (the engine requires the windowing thread);
+  previously that made Windows mark the visible window as unresponsive and show the spinning/loading
+  cursor. The separate splash stays responsive, and the main window is moved on-screen only when the
+  renderer is ready (Revit) or the first scene commits.
 * **Branded splash + loaders**: a separate top-level `SplashWindow` (logo, "Power Potion", animated
   bar, phase text) is used because the render surface is an HwndHost (airspace). It shows
   "Connecting to Revit…" → "Scene received — starting renderer…" → "Importing scene from Revit…".
@@ -176,6 +213,25 @@ The host WPF window uses the same palette (deep violet `#140B22` / `#1E1230`, ac
   and retried if Revit denies the event. The Idling path remains as a fallback.
 * **Startup race**: the TCP reader is started only after `MainWindow` has subscribed to the
   connection events, so the first scene Revit sends immediately after connecting cannot be dropped.
+* **Export target is resolved per export** (not cached at Start): the active `UIDocument`/`View3D`
+  are read again every time (Revit replaces `Document` objects when a model is reopened); if the
+  active document is a family, the open project is used; if the active 3D view is hidden/empty, the
+  document's other 3D views are tried. This mirrors Enscape's
+  `GetActiveOrDefault3DViewFromActiveDocument` / `SetActiveViewIfNot3D` / `ResetActiveView`
+  (REA Evidence `ev_3ea1e4e9c5caddf615e749c3fa3e1760cf359baf611d92dfc029ed1dd5702c67`).
+  Empty worlds are never sent once a scene exists, and the host ignores empty worlds entirely
+  (keeping the current scene or the branded splash instead of clearing the renderer and flashing its
+  loading screen). Exports are strictly event-driven (initial connection, `EngineReady`, debounced
+  changes, view/document activation, Refresh); the Idling loop never starts a full export. Every sent
+  world carries a monotonic revision; the host applies the newest queued revision once and ignores
+  duplicates/older revisions, so a burst cannot clear and rebuild the scene repeatedly.
+* **Debounced live updates + Refresh**: `DocumentChanged` only marks the scene dirty and records the
+  time; the Idling loop re-exports after 500 ms of quiet (so dragging a slider or editing several
+  elements renders once), with the host showing the compact refresh spinner. The host queues snapshots
+  and applies one at a time after the previous engine commit. The ribbon **Refresh** button forces an
+  immediate re-export (`LiveSyncService.Refresh`), and resuming from **Pause Updates** also refreshes.
+  The smoke test covers the real Revit order (`--late-world`), an empty world before a scene
+  (`--empty-first`), duplicate revisions (`--duplicate`), and the live-update path.
 * **Navigation**: the native window is disabled (`EnableWindow(false)`) and the host owns input,
   eliminating the competing engine camera movement that caused the shaking sky. Mouse look uses a
   low-level hook with cursor recentering (left or right button), the wheel is captured over the

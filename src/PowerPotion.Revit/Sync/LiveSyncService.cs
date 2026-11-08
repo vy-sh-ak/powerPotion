@@ -37,9 +37,16 @@ public sealed class LiveSyncService : IDisposable
     private bool _liveUpdatesPaused;
     private bool _running;
     private DateTime _lastExport = DateTime.MinValue;
+    private DateTime _lastDocumentChange = DateTime.MinValue;
     private volatile bool _reexportQueued;
     private volatile bool _hostConnected;
     private bool _initialWorldSent;
+    private int _lastWorldModels;
+    private long _worldRevision;
+    private volatile bool _exportInFlight;
+    private bool _hasSentScene;
+    private bool _forceNextSend;
+    private ulong _lastSceneSignature;
     private DateTime _lastCameraPush = DateTime.MinValue;
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private ExternalEvent? _exportEvent;
@@ -102,7 +109,7 @@ public sealed class LiveSyncService : IDisposable
             {
                 await WaitForClientAsync();
                 _hostConnected = true;
-                RequestExport();
+                RequestExport("initial");
             }
             catch (Exception ex) { LogLine("start: " + ex.Message); }
         });
@@ -117,11 +124,12 @@ public sealed class LiveSyncService : IDisposable
     }
 
     /// <summary>Queues an export on Revit's API thread (ExternalEvent, like Enscape's CAD dispatcher).</summary>
-    private void RequestExport()
+    private void RequestExport(string reason)
     {
         try
         {
             if (!_running || _exportEvent == null) return;
+            LogLine($"export request: {reason}");
             if (_exportEvent.Raise() != ExternalEventRequest.Accepted)
                 ScheduleExportRetry();
         }
@@ -138,7 +146,7 @@ public sealed class LiveSyncService : IDisposable
             {
                 await Task.Delay(300);
                 _retryExportScheduled = false;
-                if (_running) RequestExport();
+                if (_running) RequestExport("retry");
             }
             catch { _retryExportScheduled = false; }
         });
@@ -146,7 +154,7 @@ public sealed class LiveSyncService : IDisposable
 
     private void ExecutePendingExport()
     {
-        if (!_running) return;
+        if (!_running || _exportInFlight) return;
         if (DateTime.UtcNow - _lastExport < TimeSpan.FromMilliseconds(250))
         {
             _reexportQueued = true;
@@ -154,9 +162,16 @@ public sealed class LiveSyncService : IDisposable
             return;
         }
         _reexportQueued = false;
-        _initialWorldSent = true;
-        ExportAndSendWorld(fullExport: true);
-        if (!_liveUpdatesPaused) PushCamera();
+        _exportInFlight = true;
+        try
+        {
+            ExportAndSendWorld(fullExport: true);
+            if (!_liveUpdatesPaused) PushCamera();
+        }
+        finally
+        {
+            _exportInFlight = false;
+        }
     }
 
     public void Stop()
@@ -196,6 +211,18 @@ public sealed class LiveSyncService : IDisposable
     {
         _liveUpdatesPaused = paused;
         _ = SendAsync(MessageType.LiveUpdateState, w => w.Write(paused));
+        if (!paused) Refresh();
+    }
+
+    /// <summary>Forces an immediate full re-export of the active document/view (ribbon Refresh).</summary>
+    public void Refresh()
+    {
+        if (!_running) return;
+        _lastDocumentChange = DateTime.MinValue;
+        _reexportQueued = true;
+        _forceNextSend = true;
+        LogLine("refresh requested");
+        RequestExport("refresh");
     }
 
     // ------------------------------------------------------------------
@@ -205,14 +232,18 @@ public sealed class LiveSyncService : IDisposable
     private View3D? ActiveOrDefault3DView()
     {
         var uidoc = _uiApp.ActiveUIDocument;
-        if (uidoc?.Document != _document) return null;
-        if (uidoc.ActiveGraphicalView is View3D v3d) return v3d;
+        var document = uidoc?.Document;
+        if (document == null) return null;
+        if (uidoc!.ActiveGraphicalView is View3D active) return active;
 
-        var collector = new FilteredElementCollector(_document)
+        var views = new FilteredElementCollector(document)
             .OfClass(typeof(View3D))
             .Cast<View3D>()
-            .Where(v => !v.IsTemplate && !v.Name.StartsWith("{"));
-        return collector.FirstOrDefault(v => v.Name.Contains("Default")) ?? collector.FirstOrDefault();
+            .Where(v => !v.IsTemplate)
+            .ToList();
+        return views.FirstOrDefault(v => v.Name.Contains("Default"))
+               ?? views.FirstOrDefault(v => !v.Name.StartsWith("{"))
+               ?? views.FirstOrDefault();
     }
 
     // ------------------------------------------------------------------
@@ -280,6 +311,7 @@ public sealed class LiveSyncService : IDisposable
                     case MessageType.EngineReady:
                         var ready = (EngineReady)MessageCodec.Decode(type, payload);
                         LogLine(ready.Started ? "Engine ready." : $"Engine failed: {ready.Error}");
+                        if (ready.Started) RequestExport("engine-ready");
                         break;
                     case MessageType.RendererClosed:
                         _dispatcher.Invoke(() => Stop());
@@ -352,18 +384,47 @@ public sealed class LiveSyncService : IDisposable
     private void HookEvents()
     {
         _uiApp.Idling += OnIdling;
+        _uiApp.ViewActivated += OnViewActivated;
         _uiApp.Application.DocumentChanged += OnDocumentChanged;
+        _uiApp.Application.DocumentOpened += OnDocumentOpened;
     }
 
     private void UnhookEvents()
     {
         _uiApp.Idling -= OnIdling;
+        _uiApp.ViewActivated -= OnViewActivated;
         _uiApp.Application.DocumentChanged -= OnDocumentChanged;
+        _uiApp.Application.DocumentOpened -= OnDocumentOpened;
+    }
+
+    private void OnViewActivated(object? sender, Autodesk.Revit.UI.Events.ViewActivatedEventArgs e)
+    {
+        if (!_running) return;
+        var document = _uiApp.ActiveUIDocument?.Document;
+        if (document == null) return;
+        if (e.CurrentActiveView is View3D view)
+        {
+            _document = document;
+            _view = view;
+            _lastDocumentChange = DateTime.MinValue;
+            _reexportQueued = true;
+            RequestExport("view");
+        }
+    }
+
+    private void OnDocumentOpened(object? sender, Autodesk.Revit.DB.Events.DocumentOpenedEventArgs e)
+    {
+        if (!_running) return;
+        _document = e.Document;
+        _view = ActiveOrDefault3DView();
+        _lastWorldModels = 0;
+        _lastDocumentChange = DateTime.MinValue;
+        _reexportQueued = true;
+        RequestExport("document");
     }
 
     private void OnDocumentChanged(object? sender, Autodesk.Revit.DB.Events.DocumentChangedEventArgs e)
-    {
-        if (!_running || _liveUpdatesPaused) return;
+    {        if (!_running || _liveUpdatesPaused) return;
         // Document objects can be different wrappers around the same model; compare identity by title+path.
         var changed = e.GetDocument();
         if (changed == null) return;
@@ -374,10 +435,11 @@ public sealed class LiveSyncService : IDisposable
             if (!sameFile) return;
         }
 
-        // Do not export inside the transaction/commit path: queue an API-context export.
+        // Do not export inside the transaction/commit path: queue an API-context export and let the
+        // Idling loop wait for a short quiet period (debounce) so a burst of edits renders once.
+        _lastDocumentChange = DateTime.UtcNow;
         _reexportQueued = true;
-        LogLine("document changed -> export queued");
-        RequestExport();
+        LogLine("document changed -> export queued (debounced)");
     }
 
     private void OnIdling(object? sender, Autodesk.Revit.UI.Events.IdlingEventArgs e)
@@ -388,16 +450,13 @@ public sealed class LiveSyncService : IDisposable
         // renderer window has focus, which freezes camera streaming and live model updates.
         try { e.SetRaiseWithoutDelay(); } catch { }
 
-        // Fallback: if the ExternalEvent could not run (modal dialog, etc.), export here.
-        if (!_initialWorldSent && _hostConnected)
+        // Only real, debounced changes trigger exports. There is deliberately no "initial world"
+        // polling here: the initial export is requested by the connection task and EngineReady.
+        if (_reexportQueued && !_liveUpdatesPaused
+            && DateTime.UtcNow - _lastDocumentChange >= TimeSpan.FromMilliseconds(500)
+            && DateTime.UtcNow - _lastExport >= TimeSpan.FromMilliseconds(250))
         {
-            RequestExport();
-            return;
-        }
-
-        if (_reexportQueued && !_liveUpdatesPaused && DateTime.UtcNow - _lastExport >= TimeSpan.FromMilliseconds(250))
-        {
-            RequestExport();
+            RequestExport("change");
             return;
         }
 
@@ -414,32 +473,192 @@ public sealed class LiveSyncService : IDisposable
 
     private void ExportAndSendWorld(bool fullExport)
     {
-        if (_document == null || _stream == null) return;
+        if (_stream == null) return;
         try
         {
-            var sw = Stopwatch.StartNew();
-
-            _materials = new RevitMaterialParser(_document, TextureSearchPaths());
-            var context = new SceneExportContext(_document, _view!, _materials);
-            var exporter = new CustomExporter(_document, context)
+            // Resolve the document/view at export time. Revit can reopen a document after the
+            // plugin was started (Document objects are replaced), so a view cached at Start may
+            // belong to a closed document and CustomExporter then returns an empty world.
+            var uidoc = _uiApp.ActiveUIDocument;
+            var document = uidoc?.Document;
+            if (document == null || document.IsFamilyDocument)
             {
-                ShouldStopOnError = false,
-                IncludeGeometricObjects = true,
-            };
-            exporter.Export(_view!);
-            _lastContext = context;
-            _lastExport = DateTime.UtcNow;
+                // The family editor is not a renderable project scene; fall back to the open project.
+                var project = _uiApp.Application.Documents
+                    .Cast<Document>()
+                    .FirstOrDefault(d => !d.IsFamilyDocument && !d.IsLinked);
+                if (project != null)
+                {
+                    document = project;
+                    uidoc = null;
+                }
+            }
+            if (document == null)
+            {
+                LogLine("export skipped: no active document");
+                return;
+            }
 
-            var world = context.ToWorldSnapshot();
+            var sw = Stopwatch.StartNew();
+            var candidates = CandidateViews(uidoc, document);
+            WorldSnapshot? world = null;
+            View3D? chosen = null;
+            string? firstView = null;
+
+            // A view can legitimately be empty (elements hidden/isolated while editing a material).
+            // Try the active 3D view first, then the document's other 3D views, so a hidden active
+            // view does not leave the renderer blank.
+            foreach (var view in candidates)
+            {
+                firstView ??= view.Name;
+                var candidate = ExportView(document, view);
+                if (world == null) world = candidate;
+                if (candidate.Models.Count > 0)
+                {
+                    world = candidate;
+                    chosen = view;
+                    break;
+                }
+                LogLine($"view '{view.Name}' exported 0 models — trying next 3D view");
+            }
+
+            _lastExport = DateTime.UtcNow;
+            if (world == null)
+            {
+                LogLine("export skipped: no 3D view");
+                return;
+            }
+
+            if (chosen != null && (_view?.Id != chosen.Id || !ReferenceEquals(document, _document)))
+            {
+                LogLine($"export target: '{document.Title}' view '{chosen.Name}'");
+                _document = document;
+                _view = chosen;
+            }
+            else if (_view == null)
+            {
+                _document = document;
+                _view = candidates.FirstOrDefault();
+            }
+
             LogLine($"Exported {world.Models.Count} models / {world.Instances.Count} instances / " +
                     $"{world.Materials.Count} materials / {world.Lights.Count} lights in {sw.ElapsedMilliseconds} ms.");
 
+            if (world.Models.Count == 0)
+            {
+                var message = $"No visible geometry in the 3D view ('{firstView}'). Unhide the model or pick another 3D view.";
+                LogLine(message);
+                _ = SendAsync(MessageType.Status, w => w.Write(message));
+                return;
+            }
+
+            // Never replace a live scene with a transient empty export (view regenerating, document
+            // reopening, etc.): that made the engine flash its loading screen forever.
+            var signature = ComputeSceneSignature(world);
+            if (!_forceNextSend && _hasSentScene && signature == _lastSceneSignature)
+            {
+                LogLine("scene unchanged — world send skipped");
+                return;
+            }
+            _forceNextSend = false;
+            _hasSentScene = true;
+            _lastSceneSignature = signature;
+
+            world.Revision = ++_worldRevision;
+            _lastWorldModels = world.Models.Count;
             _ = Task.Run(() => _ = SendWorldAsync(world));
         }
         catch (Exception ex)
         {
             LogLine("export: " + ex.Message);
         }
+    }
+
+    /// <summary>Active 3D view first, then default/other 3D views (deduplicated, at most 4).</summary>
+    private static List<View3D> CandidateViews(UIDocument? uidoc, Document document)
+    {
+        var views = new List<View3D>();
+        void Add(View3D? view)
+        {
+            if (view == null || view.IsTemplate) return;
+            if (views.Any(v => v.Id == view.Id)) return;
+            views.Add(view);
+        }
+
+        Add(uidoc?.ActiveGraphicalView as View3D);
+        try
+        {
+            var all = new FilteredElementCollector(document)
+                .OfClass(typeof(View3D))
+                .Cast<View3D>()
+                .Where(v => !v.IsTemplate)
+                .ToList();
+            foreach (var v in all.Where(v => v.Name.Contains("Default", StringComparison.OrdinalIgnoreCase)))
+                Add(v);
+            foreach (var v in all) Add(v);
+        }
+        catch { }
+        return views.Take(4).ToList();
+    }
+
+    private WorldSnapshot ExportView(Document document, View3D view)
+    {
+        _materials = new RevitMaterialParser(document, TextureSearchPaths(document)) { Log = LogLine };
+        var context = new SceneExportContext(document, view, _materials);
+        var exporter = new CustomExporter(document, context)
+        {
+            ShouldStopOnError = false,
+            IncludeGeometricObjects = true,
+        };
+        exporter.Export(view);
+        _lastContext = context;
+        return context.ToWorldSnapshot();
+    }
+
+    /// <summary>
+    /// Cheap scene fingerprint used to avoid re-sending an identical full world (startup triggers,
+    /// duplicate view/document events). Camera, material properties/textures and geometry endpoints
+    /// are included; interior-only edits that keep every count and endpoint unchanged are rare.
+    /// </summary>
+    private static ulong ComputeSceneSignature(WorldSnapshot world)
+    {
+        var h = new HashCode();
+        h.Add(world.DocumentName);
+        h.Add(world.ViewName);
+        h.Add(world.Models.Count);
+        h.Add(world.Instances.Count);
+        h.Add(world.Materials.Count);
+        h.Add(world.Lights.Count);
+        h.Add(world.Camera.PosX); h.Add(world.Camera.PosY); h.Add(world.Camera.PosZ);
+        h.Add(world.Camera.QuatX); h.Add(world.Camera.QuatY); h.Add(world.Camera.QuatZ); h.Add(world.Camera.QuatW);
+        h.Add(world.Camera.FovDegrees); h.Add(world.Camera.Ortho);
+
+        foreach (var m in world.Materials)
+        {
+            h.Add(m.Id); h.Add(m.Name);
+            h.Add(m.DiffuseR); h.Add(m.DiffuseG); h.Add(m.DiffuseB);
+            h.Add(m.Opacity); h.Add(m.Roughness); h.Add(m.Metallic); h.Add(m.Specular);
+            h.Add(m.DiffuseTexture.File); h.Add(m.BumpTexture.File);
+        }
+
+        foreach (var model in world.Models)
+        {
+            h.Add(model.Id);
+            h.Add(model.Positions.Length);
+            h.Add(model.Indices.Length);
+            if (model.Positions.Length >= 3)
+            {
+                h.Add(model.Positions[0]); h.Add(model.Positions[1]); h.Add(model.Positions[2]);
+                int last = model.Positions.Length - 3;
+                h.Add(model.Positions[last]); h.Add(model.Positions[last + 1]); h.Add(model.Positions[last + 2]);
+            }
+            foreach (var g in model.Groups)
+            {
+                h.Add(g.StartIndex); h.Add(g.NumIndices); h.Add(g.FrontFaceMaterialId);
+            }
+        }
+
+        return unchecked((ulong)h.ToHashCode());
     }
 
     private async Task SendWorldAsync(WorldSnapshot world)
@@ -453,6 +672,7 @@ public sealed class LiveSyncService : IDisposable
             // sun lives in the world message; also push the camera right after
             await MessageCodec.SendAsync(stream, MessageType.CameraUpdate, w => MessageCodec.WriteCamera(w, world.Camera));
             LogLine("World sent.");
+            _initialWorldSent = true;
         }
         catch (Exception ex)
         {
@@ -518,18 +738,82 @@ public sealed class LiveSyncService : IDisposable
         });
     }
 
-    private static IEnumerable<string> TextureSearchPaths()
+    /// <summary>
+    /// Revit texture search roots, mirroring Enscape's FileLocator: Revit.ini material libraries and
+    /// additional render appearance paths, the per-version RVT material libraries, the shared Autodesk
+    /// material libraries, and the document folder.
+    /// </summary>
+    internal static IEnumerable<string> TextureSearchPaths(Document document)
     {
         var paths = new List<string>();
-        // Revit's built-in material textures
-        var revitData = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "Autodesk", "RVT", "Materials", "Textures");
-        if (Directory.Exists(revitData)) paths.Add(revitData);
-        var adskShared = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-            "Autodesk Shared", "Materials", "Textures");
-        if (Directory.Exists(adskShared)) paths.Add(adskShared);
+
+        void Add(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return;
+            try
+            {
+                path = Environment.ExpandEnvironmentVariables(path.Trim().Trim('"'));
+                if (Directory.Exists(path) && !paths.Contains(path, StringComparer.OrdinalIgnoreCase))
+                    paths.Add(path);
+            }
+            catch { }
+        }
+
+        try
+        {
+            var ini = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Autodesk", "Revit", "Autodesk Revit 2026", "Revit.ini");
+            if (File.Exists(ini))
+            {
+                foreach (var rawLine in File.ReadAllLines(ini))
+                {
+                    var line = rawLine.Trim();
+                    var eq = line.IndexOf('=');
+                    if (eq <= 0) continue;
+                    var key = line.Substring(0, eq).Trim();
+                    var value = line.Substring(eq + 1).Trim();
+                    if (key.Equals("MaterialLibraryFiles", StringComparison.OrdinalIgnoreCase))
+                    {
+                        Add(value);
+                    }
+                    else if (key.Equals("AdditionalRenderAppearancePaths", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foreach (var part in value.Split(';')) Add(part);
+                    }
+                }
+            }
+        }
+        catch { }
+
+        var programData = Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData);
+        var autodesk = Path.Combine(programData, "Autodesk");
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories(autodesk, "RVT *"))
+            {
+                Add(Path.Combine(dir, "Materials"));
+                Add(Path.Combine(dir, "Materials", "1"));
+                Add(Path.Combine(dir, "Materials", "2"));
+                Add(Path.Combine(dir, "Materials", "3"));
+            }
+        }
+        catch { }
+        Add(Path.Combine(autodesk, "RVT", "Materials", "Textures"));
+        Add(Path.Combine(programData, "Autodesk Shared", "Materials", "Textures"));
+
+        var sharedMaterials = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles),
+            "Autodesk Shared", "Materials");
+        Add(sharedMaterials);
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories(sharedMaterials)) Add(dir);
+        }
+        catch { }
+
+        try { Add(Path.GetDirectoryName(document?.PathName ?? "")); } catch { }
+
         return paths;
     }
 }

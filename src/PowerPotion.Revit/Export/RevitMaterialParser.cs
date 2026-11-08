@@ -15,8 +15,15 @@ namespace PowerPotion.Revit.Export;
 public sealed class RevitMaterialParser
 {
     private readonly Dictionary<ElementId, MaterialDto> _cache = new();
+    private readonly Dictionary<int, MaterialDto> _overrideCache = new();
     private readonly List<string> _textureSearchPaths;
     private readonly Document _doc;
+    private Dictionary<string, string>? _textureFileIndex;
+    private readonly Dictionary<string, string?> _textureResolution = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, Dictionary<string, string>> IndexCache = new();
+
+    /// <summary>Diagnostics sink (revit-sync.log).</summary>
+    public Action<string>? Log;
 
     public RevitMaterialParser(Document doc, IEnumerable<string>? extraTexturePaths = null)
     {
@@ -24,7 +31,57 @@ public sealed class RevitMaterialParser
         _textureSearchPaths = new List<string>(extraTexturePaths ?? Array.Empty<string>());
     }
 
-    public MaterialDto? GetOrParse(MaterialNode node) => GetOrParse(node.MaterialId);
+    /// <summary>
+    /// Material for one exported face. Uses the face's effective appearance asset when the face has a
+    /// paint/view override, otherwise the document material (Enscape's MaterialSourceSelector does the
+    /// same via MaterialNode.HasOverriddenAppearance / GetAppearanceOverride).
+    /// </summary>
+    public MaterialDto? GetOrParse(MaterialNode node)
+    {
+        var dto = GetOrParse(node.MaterialId);
+        if (!node.HasOverriddenAppearance && dto != null) return dto;
+
+        var id = node.MaterialId == ElementId.InvalidElementId
+            ? 700999999
+            : 700000000 + (int)(node.MaterialId.Value % 1000000);
+        if (_overrideCache.TryGetValue(id, out var cached)) return cached;
+
+        try
+        {
+            var asset = node.HasOverriddenAppearance ? node.GetAppearanceOverride() : node.GetAppearance();
+            if (asset == null) return dto;
+
+            var result = new MaterialDto
+            {
+                Id = id,
+                Name = (dto?.Name ?? "Material") + (node.HasOverriddenAppearance ? " (override)" : " (face)"),
+                Opacity = dto?.Opacity ?? 1f,
+                Roughness = dto?.Roughness ?? 0.5f,
+                Metallic = dto?.Metallic ?? 0f,
+                Specular = dto?.Specular ?? 0.04f,
+            };
+            try
+            {
+                if (node.Color is { } c)
+                {
+                    result.DiffuseR = c.Red / 255f;
+                    result.DiffuseG = c.Green / 255f;
+                    result.DiffuseB = c.Blue / 255f;
+                }
+            }
+            catch { }
+
+            ApplyAsset(result, asset);
+            ApplyKeywordType(result);
+            _overrideCache[id] = result;
+            Log?.Invoke($"material {result.Id} '{result.Name}' from face appearance");
+            return result;
+        }
+        catch
+        {
+            return dto;
+        }
+    }
 
     public MaterialDto? GetOrParse(ElementId materialId)
     {
@@ -36,7 +93,8 @@ public sealed class RevitMaterialParser
     }
 
     /// <summary>All materials parsed so far (deduplicated).</summary>
-    public IEnumerable<MaterialDto> AllParsed() => _cache.Values;
+    public IEnumerable<MaterialDto> AllParsed() =>
+        _cache.Values.Concat(_overrideCache.Values);
 
     private MaterialDto? Parse(ElementId materialId)
     {
@@ -61,12 +119,13 @@ public sealed class RevitMaterialParser
 
         // --- appearance asset ---
         var assetId = revitMaterial.AppearanceAssetId;
+        var schema = "(graphics only)";
         if (assetId != ElementId.InvalidElementId)
         {
             try
             {
                 if (_doc.GetElement(assetId) is AppearanceAssetElement assetElement)
-                    ApplyAsset(result, assetElement.GetRenderingAsset());
+                    schema = ApplyAsset(result, assetElement.GetRenderingAsset());
             }
             catch
             {
@@ -75,12 +134,44 @@ public sealed class RevitMaterialParser
         }
 
         ApplyKeywordType(result);
+
+        Log?.Invoke($"material {result.Id} '{result.Name}' schema={schema} " +
+                    $"rgb=({result.DiffuseR:0.##},{result.DiffuseG:0.##},{result.DiffuseB:0.##}) " +
+                    $"tex='{result.DiffuseTexture.File}'");
         return result;
     }
 
-    private void ApplyAsset(MaterialDto m, Asset asset)
+    /// <summary>
+    /// Schema → albedo property, from Enscape's MaterialParser literals (REA evidence:
+    /// Enscape.Revit.Plugin.Materials.MaterialParser #US). The grouped bitmap for a Revit material is
+    /// connected to this property, not always to generic_diffuse — this is why e.g. a MasonryCMU roof
+    /// used to lose its terracotta texture and fall back to white.
+    /// </summary>
+    private static string AlbedoProperty(string schema) => schema switch
     {
-        var schema = FindString(asset, "BaseSchema");
+        "CeramicSchema" => "ceramic_color",
+        "ConcreteSchema" => "concrete_color",
+        "GlazingSchema" => "glazing_transmittance_color",
+        "HardwoodSchema" => "hardwood_color",
+        "MasonryCMUSchema" => "masonrycmu_color",
+        "MetallicPaintSchema" => "metallicpaint_base_color",
+        "MetalSchema" => "metal_color",
+        "MirrorSchema" => "mirror_tintcolor",
+        "PlasticVinylSchema" => "plasticvinyl_color",
+        "PrismGlazingSchema" => "glazing_transmission_color",
+        "PrismLayeredSchema" => "layered_diffuse",
+        "PrismMetalSchema" => "metal_f0",
+        "PrismOpaqueSchema" => "opaque_albedo",
+        "PrismTransparentSchema" => "transparent_color",
+        "SolidGlassSchema" => "solidglass_transmittance",
+        "StoneSchema" => "stone_color",
+        "WallPaintSchema" => "wallpaint_color",
+        _ => "generic_diffuse",
+    };
+
+    private string ApplyAsset(MaterialDto m, Asset asset)
+    {
+        var schema = FindString(asset, "BaseSchema") ?? "(unknown)";
 
         switch (schema)
         {
@@ -101,44 +192,49 @@ public sealed class RevitMaterialParser
                 m.Specular = 0.9f;
                 break;
             case "PrismOpaqueSchema":
-                if (FindColor(asset, "opaque_albedo") is { } albedo)
-                {
-                    m.DiffuseR = (float)albedo.Item1;
-                    m.DiffuseG = (float)albedo.Item2;
-                    m.DiffuseB = (float)albedo.Item3;
-                }
+                ApplyAlbedo(m, asset, "opaque_albedo");
                 m.Roughness = (float)FindDouble(asset, "surface_roughness", 0.5);
                 break;
             default:
-                ApplyCommonColor(m, asset);
+                ApplyAlbedo(m, asset, AlbedoProperty(schema));
                 break;
         }
 
         // bump maps are shared by nearly all schemas via connected properties
-        var bump = FindTextureSlot(asset, "generic_bump_map");
+        var bump = FindTextureSlot(asset, "generic_bump_map") ?? FindTextureSlot(asset, "bumpmap_Bitmap");
         if (bump != null)
         {
             m.BumpTexture = bump;
             m.BumpAmount = (float)FindDouble(asset, "generic_bump_amount", 0.0) * 0.05f;
+            if (m.BumpAmount <= 0)
+                m.BumpAmount = (float)FindDouble(asset, "bumpmap_Depth", 0.1) * 0.05f;
             m.BumpMapKind = FindString(asset, "bumpmap_Type")?.Contains("Normal", StringComparison.OrdinalIgnoreCase) == true
                 ? 2 /* NORMAL */ : 1 /* BUMP */;
+        }
+        return schema;
+    }
+
+    /// <summary>Reads the albedo color and (connected) bitmap of one schema property.</summary>
+    private void ApplyAlbedo(MaterialDto m, Asset asset, string property)
+    {
+        if (FindColor(asset, property) is { } c)
+        {
+            m.DiffuseR = (float)c.Item1;
+            m.DiffuseG = (float)c.Item2;
+            m.DiffuseB = (float)c.Item3;
+        }
+
+        var texture = FindTextureSlot(asset, property);
+        if (texture != null)
+        {
+            m.DiffuseTexture = texture;
+            m.ImageFade = (float)FindDouble(asset, property + "_image_fade", 1.0);
         }
     }
 
     private void ApplyGeneric(MaterialDto m, Asset asset)
     {
-        if (FindColor(asset, "generic_diffuse") is { } diffuse)
-        {
-            m.DiffuseR = (float)diffuse.Item1;
-            m.DiffuseG = (float)diffuse.Item2;
-            m.DiffuseB = (float)diffuse.Item3;
-        }
-        var diffuseTexture = FindTextureSlot(asset, "generic_diffuse");
-        if (diffuseTexture != null)
-        {
-            m.DiffuseTexture = diffuseTexture;
-            m.ImageFade = (float)FindDouble(asset, "generic_diffuse_image_fade", 1.0);
-        }
+        ApplyAlbedo(m, asset, "generic_diffuse");
 
         var gloss = FindDouble(asset, "generic_glossiness", 0.5);
         m.Roughness = (float)Math.Clamp(1.0 - gloss, 0.02, 1.0);
@@ -188,10 +284,7 @@ public sealed class RevitMaterialParser
 
     private void ApplyMetal(MaterialDto m, Asset asset)
     {
-        if (FindColor(asset, "metal_color") is { } c)
-        {
-            m.DiffuseR = (float)c.Item1; m.DiffuseG = (float)c.Item2; m.DiffuseB = (float)c.Item3;
-        }
+        ApplyAlbedo(m, asset, "metal_color");
         m.Metallic = 1f;
         m.Specular = 0.9f;
         m.Roughness = 0.35f;
@@ -199,22 +292,8 @@ public sealed class RevitMaterialParser
 
     private void ApplyCommonColor(MaterialDto m, Asset asset)
     {
-        var names = new[]
-        {
-            "ceramic_color", "concrete_color", "hardwood_color", "masonrycmu_color",
-            "metallicpaint_base_color", "plasticvinyl_color", "stone_color",
-            "wallpaint_color", "mirror_tintcolor", "glazing_transmittance_color",
-        };
-        foreach (var n in names)
-        {
-            if (FindColor(asset, n) is { } c)
-            {
-                m.DiffuseR = (float)c.Item1; m.DiffuseG = (float)c.Item2; m.DiffuseB = (float)c.Item3;
-                break;
-            }
-        }
-        var tex = FindTextureSlot(asset, "generic_diffuse");
-        if (tex != null) m.DiffuseTexture = tex;
+        // Kept for callers that only know a material has a color; all known schemas use ApplyAlbedo.
+        ApplyAlbedo(m, asset, "generic_diffuse");
     }
 
     private static void ApplyKeywordType(MaterialDto m)
@@ -238,38 +317,76 @@ public sealed class RevitMaterialParser
             var prop = asset.FindByName(propertyName);
             if (prop == null) return null;
 
-            // find the connected bitmap string (unifiedbitmap_Bitmap lives on a connected asset)
-            var connected = prop.GetAllConnectedProperties()
-                .OfType<AssetPropertyString>()
-                .Where(p => !string.IsNullOrEmpty(p.Value) && FileExistsAnywhere(p.Value))
-                .FirstOrDefault();
-            if (connected == null)
+            // The bitmap path is an AssetPropertyString on the connected UnifiedBitmap asset. Prefer a
+            // property literally named unifiedbitmap_Bitmap; otherwise keep the first resolvable string.
+            AssetPropertyString? bitmap = null;
+            foreach (var connected in prop.GetAllConnectedProperties())
             {
-                var single = prop.GetSingleConnectedAsset();
-                if (single != null)
+                if (connected is not AssetPropertyString s || string.IsNullOrWhiteSpace(s.Value)) continue;
+                if (connected.Name == "unifiedbitmap_Bitmap") { bitmap = s; break; }
+                if (bitmap == null && ResolveTexturePath(s.Value) != null) bitmap = s;
+            }
+
+            var single = prop.GetSingleConnectedAsset();
+            var direct = single?.FindByName("unifiedbitmap_Bitmap") as AssetPropertyString;
+            if (single != null && (direct == null || string.IsNullOrWhiteSpace(direct.Value)))
+            {
+                foreach (var connected in single.GetAllConnectedProperties())
                 {
-                    connected = single.FindByName("unifiedbitmap_Bitmap") as AssetPropertyString;
-                    if (connected == null || string.IsNullOrEmpty(connected.Value) || !FileExistsAnywhere(connected.Value))
-                        connected = null;
+                    if (connected is AssetPropertyString s2
+                        && connected.Name == "unifiedbitmap_Bitmap"
+                        && !string.IsNullOrWhiteSpace(s2.Value))
+                    {
+                        direct = s2;
+                        break;
+                    }
                 }
             }
-            if (connected == null) return null;
+            if (direct != null && !string.IsNullOrWhiteSpace(direct.Value)
+                && (bitmap == null || ResolveTexturePath(direct.Value) != null))
+                bitmap = direct;
 
-            var path = ResolveTexturePath(connected.Value);
-            if (path == null) return null;
+            if (bitmap == null || string.IsNullOrWhiteSpace(bitmap.Value))
+            {
+                Log?.Invoke($"texture slot '{propertyName}': no bitmap " +
+                            $"(prop {prop.Type}, connected {prop.NumberOfConnectedProperties})");
+                return null;
+            }
 
-            var slot = new TextureSlotDto { File = path, Brightness = 1f, Source = 0, WcsType = 0 };
+            var raw = bitmap.Value.Trim();
+            var path = ResolveTexturePath(raw);
+            if (path == null)
+            {
+                Log?.Invoke($"texture unresolved on '{propertyName}': raw='{raw}' " +
+                            $"(roots {_textureSearchPaths.Count})");
+                return null;
+            }
 
-            // real-world scale / offset / rotation → UV transform
-            double sx = FindConnectedDouble(prop, "texture_RealWorldScaleX", 1) * EngineSpace.FeetToMeters;
-            double sy = FindConnectedDouble(prop, "texture_RealWorldScaleY", 1) * EngineSpace.FeetToMeters;
-            double ox = FindConnectedDouble(prop, "texture_RealWorldOffsetX", 0) * EngineSpace.FeetToMeters;
-            double oy = FindConnectedDouble(prop, "texture_RealWorldOffsetY", 0) * EngineSpace.FeetToMeters;
-            double angle = FindConnectedDouble(prop, "texture_WAngle", 0);
+            var slot = new TextureSlotDto
+            {
+                File = path,
+                Brightness = (float)FindConnectedDouble(prop, "unifiedbitmap_RGBAmount", 1.0),
+                IsInverted = FindConnectedBoolean(prop, "unifiedbitmap_Invert", false),
+                Source = 0,
+                WcsType = 0,
+            };
+
+            // real-world scale / offset / rotation → UV transform (aliases differ per schema)
+            double sx = AliasDouble(prop, "texture_RealWorldScaleX", "unifiedbitmap_RealWorldScaleX", 1);
+            double sy = AliasDouble(prop, "texture_RealWorldScaleY", "unifiedbitmap_RealWorldScaleY", 1);
+            double ox = AliasDouble(prop, "texture_RealWorldOffsetX", "unifiedbitmap_RealWorldOffsetX", 0);
+            double oy = AliasDouble(prop, "texture_RealWorldOffsetY", "unifiedbitmap_RealWorldOffsetY", 0);
+            double angle = AliasDouble(prop, "texture_WAngle", "unifiedbitmap_WAngle", 0);
+
+            sx *= EngineSpace.FeetToMeters;
+            sy *= EngineSpace.FeetToMeters;
+            ox *= EngineSpace.FeetToMeters;
+            oy *= EngineSpace.FeetToMeters;
 
             if (sx > 0 && sy > 0)
             {
-                double cos = Math.Cos(angle), sin = Math.Sin(angle);
+                double rad = angle * Math.PI / 180.0; // Revit stores the angle in degrees
+                double cos = Math.Cos(rad), sin = Math.Sin(rad);
                 slot.Transformation = new float[]
                 {
                     (float)(cos / sx), (float)(-sin / sy), 0,
@@ -279,10 +396,17 @@ public sealed class RevitMaterialParser
             }
             return slot;
         }
-        catch
+        catch (Exception ex)
         {
+            Log?.Invoke($"texture parse failed on '{propertyName}': {ex.Message}");
             return null;
         }
+    }
+
+    private static double AliasDouble(AssetProperty prop, string primary, string alias, double fallback)
+    {
+        var value = FindConnectedDouble(prop, primary, double.NaN);
+        return double.IsNaN(value) ? FindConnectedDouble(prop, alias, fallback) : value;
     }
 
     private static double FindConnectedDouble(AssetProperty prop, string name, double fallback)
@@ -309,29 +433,87 @@ public sealed class RevitMaterialParser
         return fallback;
     }
 
-    private bool FileExistsAnywhere(string value)
+    private static bool FindConnectedBoolean(AssetProperty prop, string name, bool fallback)
     {
-        if (File.Exists(value)) return true;
-        foreach (var dir in _textureSearchPaths)
+        try
         {
-            try { if (File.Exists(Path.Combine(dir, value))) return true; }
-            catch { }
+            foreach (var connected in prop.GetAllConnectedProperties())
+                if (connected.Name == name && connected is AssetPropertyBoolean b) return b.Value;
+            if (prop.GetSingleConnectedAsset()?.FindByName(name) is AssetPropertyBoolean b2) return b2.Value;
         }
-        return false;
+        catch { }
+        return fallback;
     }
 
+    /// <summary>Resolves a stored Revit bitmap reference against the installed material libraries.</summary>
     private string? ResolveTexturePath(string value)
     {
-        if (File.Exists(value)) return Path.GetFullPath(value);
-        foreach (var dir in _textureSearchPaths)
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var raw = Environment.ExpandEnvironmentVariables(value).Trim().Trim('"');
+        if (raw.StartsWith(".\\", StringComparison.Ordinal)) raw = raw.Substring(2);
+        if (_textureResolution.TryGetValue(raw, out var cached)) return cached;
+
+        string? result = null;
+        try
+        {
+            if (File.Exists(raw))
+            {
+                result = Path.GetFullPath(raw);
+            }
+            else if (!Path.IsPathRooted(raw))
+            {
+                foreach (var root in _textureSearchPaths)
+                {
+                    var candidate = Path.Combine(root, raw);
+                    if (File.Exists(candidate)) { result = Path.GetFullPath(candidate); break; }
+                }
+            }
+
+            if (result == null)
+            {
+                var name = Path.GetFileName(raw);
+                if (!string.IsNullOrEmpty(name) && TextureFileIndex().TryGetValue(name, out var hit))
+                    result = Path.GetFullPath(hit);
+            }
+        }
+        catch { }
+
+        _textureResolution[raw] = result;
+        return result;
+    }
+
+    /// <summary>Filename → full path index of the installed Revit material libraries (cached per root set).</summary>
+    private Dictionary<string, string> TextureFileIndex()
+    {
+        if (_textureFileIndex != null) return _textureFileIndex;
+
+        var key = string.Join("|", _textureSearchPaths);
+        lock (IndexCache)
+        {
+            if (IndexCache.TryGetValue(key, out var cached))
+                return _textureFileIndex = cached;
+        }
+
+        var index = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true,
+            MaxRecursionDepth = 12,
+        };
+        foreach (var root in _textureSearchPaths)
         {
             try
             {
-                var candidate = Path.Combine(dir, value);
-                if (File.Exists(candidate)) return Path.GetFullPath(candidate);
+                foreach (var file in Directory.EnumerateFiles(root, "*.*", options))
+                    index.TryAdd(Path.GetFileName(file), file);
             }
             catch { }
         }
-        return null;
+
+        lock (IndexCache) IndexCache[key] = index;
+        _textureFileIndex = index;
+        Log?.Invoke($"texture index: {index.Count} files in {_textureSearchPaths.Count} roots");
+        return index;
     }
 }

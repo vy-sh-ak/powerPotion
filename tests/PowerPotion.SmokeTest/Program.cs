@@ -27,6 +27,8 @@ public static class Program
         var realInput = args.Any(a => a == "--real-input");
         var backgroundInput = args.Any(a => a == "--background-input");
         var lateWorld = args.Any(a => a == "--late-world");
+        var emptyFirst = args.Any(a => a == "--empty-first");
+        var duplicate = args.Any(a => a == "--duplicate");
         var hostArg = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal));
         var hostExe = hostArg != null
             ? hostArg
@@ -79,6 +81,16 @@ public static class Program
         });
 
         // World immediately: the engine is still booting, so this also checks host-side buffering.
+        if (emptyFirst)
+        {
+            // Reproduces the "document reopened / view hidden" case: an empty world arrives before
+            // the real scene. The host must ignore it and keep the branded splash (no engine flash).
+            var empty = new WorldSnapshot { DocumentName = "SmokeTest.rvt", ViewName = "{3D}" };
+            Console.WriteLine("world #0: empty (must be ignored by the host)");
+            await Send(MessageType.WorldSnapshot, w => MessageCodec.WriteWorld(w, empty));
+            await Task.Delay(1500);
+        }
+
         if (lateWorld)
         {
             // Real Revit order: the plugin exports only after the host reports EngineReady, so the
@@ -99,8 +111,7 @@ public static class Program
             await Task.Delay(3000);
         }
 
-        var world = BuildWorld(extra: false);
-        Console.WriteLine($"world #1: {world.Models.Count} models, {world.Materials.Count} materials (sent before engine ready)");
+        var world = BuildWorld(extra: false);        Console.WriteLine($"world #1: {world.Models.Count} models, {world.Materials.Count} materials (sent before engine ready)");
         await Send(MessageType.WorldSnapshot, w => MessageCodec.WriteWorld(w, world));
 
         // Camera stream at ~30 Hz, like LiveSyncService.OnIdling.
@@ -110,6 +121,13 @@ public static class Program
         await Task.Delay(14000); // engine boot + world apply
         var a = await CaptureAndWait(shotA, TimeSpan.FromSeconds(90));
         Console.WriteLine($"capture A: {Describe(shotA, a)}");
+
+        if (duplicate)
+        {
+            Console.WriteLine("world #1 duplicate (same revision 1) — host must ignore it");
+            await Send(MessageType.WorldSnapshot, w => MessageCodec.WriteWorld(w, world));
+            await Task.Delay(1200);
+        }
 
         // Second world snapshot = what DocumentChanged triggers in Revit.
         var world2 = BuildWorld(extra: true);
@@ -160,6 +178,8 @@ public static class Program
         var worldApplies = log.Split('\n').Count(l => l.Contains("OnWorld apply:"));
         var worldCommits = log.Split('\n').Count(l => l.Contains("World update finished"));
         var embedded = log.Contains("Embedded engine window");
+        var emptyIgnored = log.Contains("OnWorld ignored: empty world");
+        var duplicateIgnored = log.Contains("OnWorld ignored: duplicate revision");
         var shownIdx = log.IndexOf("Engine window shown", StringComparison.Ordinal);
         var applyIdx = log.IndexOf("OnWorld apply:", StringComparison.Ordinal);
         var shownAfterScene = shownIdx > 0 && applyIdx > 0 && shownIdx > applyIdx;
@@ -194,6 +214,8 @@ public static class Program
         Console.WriteLine("verification:");
         Console.WriteLine($"  windows visible          : {windows.Count} (expected 1)");
         Console.WriteLine($"  engine window embedded   : {embedded}");
+        Console.WriteLine($"  empty world ignored      : {emptyIgnored}");
+        Console.WriteLine($"  duplicate revision ignored : {duplicateIgnored}");
         Console.WriteLine($"  renderer shown after scene : {shownAfterScene}");
         Console.WriteLine($"  camera stream log lines  : {cameraLines} (expected >= 3, 30 updates each)");
         Console.WriteLine($"  world applies            : {worldApplies} (expected 2)");
@@ -210,6 +232,8 @@ public static class Program
         var ok = windows.Count == 1 && embedded && shownAfterScene && cameraLines >= 3 && worldApplies == 2
                  && worldCommits >= 2 && !dispatcherError && a && b && sky && canvas && walk && fly
                  && navChangedView && skyVisible && canvasHasSky && canvasHasGround
+                 && (!emptyFirst || emptyIgnored)
+                 && (!duplicate || duplicateIgnored)
                  && !double.IsNaN(walkY) && Math.Abs(walkY - 1.7) < 0.2
                  && !double.IsNaN(flyY) && flyY - 1.7 > 2.5;
         if (realInput && ok)
@@ -455,7 +479,7 @@ public static class Program
 
     private static WorldSnapshot BuildWorld(bool extra)
     {
-        var world = new WorldSnapshot { DocumentName = "SmokeTest.rvt", ViewName = "{3D}" };
+        var world = new WorldSnapshot { Revision = extra ? 2 : 1, DocumentName = "SmokeTest.rvt", ViewName = "{3D}" };
 
         world.Materials.Add(new MaterialDto { Id = 1, Name = "Ground", DiffuseR = 0.55f, DiffuseG = 0.55f, DiffuseB = 0.55f, Roughness = 0.9f });
         world.Materials.Add(new MaterialDto { Id = 2, Name = "Wall", DiffuseR = 0.85f, DiffuseG = 0.83f, DiffuseB = 0.78f, Roughness = 0.7f });

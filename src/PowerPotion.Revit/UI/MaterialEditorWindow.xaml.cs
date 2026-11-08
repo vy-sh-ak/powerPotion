@@ -1,9 +1,9 @@
-using System.IO;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Visual;
 using Autodesk.Revit.UI;
 using PowerPotion.Protocol;
 using PowerPotion.Revit.Export;
+using PowerPotion.Revit.Sync;
 using TaskDialog = Autodesk.Revit.UI.TaskDialog;
 
 namespace PowerPotion.Revit.UI;
@@ -19,11 +19,7 @@ public partial class MaterialEditorWindow : System.Windows.Window
     public MaterialEditorWindow(Document doc)
     {
         _doc = doc;
-        _parser = new RevitMaterialParser(doc, new[]
-        {
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
-                "Autodesk", "RVT", "Materials", "Textures"),
-        });
+        _parser = new RevitMaterialParser(doc, LiveSyncService.TextureSearchPaths(doc)) { Log = m => System.Diagnostics.Debug.WriteLine("[PowerPotion material] " + m) };
         InitializeComponent();
         ApplyDarkTitleBar();
         LoadMaterials();

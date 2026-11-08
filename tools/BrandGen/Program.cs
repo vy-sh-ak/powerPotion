@@ -86,6 +86,7 @@ public static class Program
             ("panorama", s => Glyph(s, PanoramaGlyph)),
             ("material", s => Glyph(s, MaterialGlyph)),
             ("sun", s => Glyph(s, SunGlyph)),
+            ("refresh", s => Glyph(s, RefreshGlyph)),
             ("about", s => Glyph(s, AboutGlyph)),
         };
         foreach (var (name, build) in icons)
@@ -235,6 +236,12 @@ public static class Program
         Ellipse(s, null, 16, 16, 9, 9, stroke: "#F5B544", strokeWidth: 1.9);
         Ellipse(s, "#F3EDFF", 16, 10.8, 1.5, 1.5);
         R(s, "#F3EDFF", 15, 14, 2, 7, 1);
+    }
+
+    private static void RefreshGlyph(Scene s)
+    {
+        PathScene(s, null, "M 24.5 16 A 8.5 8.5 0 1 1 21.6 9.4", stroke: "#F3EDFF", strokeWidth: 2.2);
+        s.Shapes.Add(Poly("#F5B544", 18.6, 6.0, 24.6, 9.2, 18.2, 13.0));
     }
 
     // ------------------------------------------------------------------

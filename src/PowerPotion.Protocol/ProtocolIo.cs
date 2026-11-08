@@ -164,6 +164,8 @@ public sealed class MaterialIo
 
 public sealed class WorldSnapshot
 {
+    /// <summary>Monotonic scene revision from the plugin; 0 = unversioned (tests/legacy).</summary>
+    public long Revision;
     public string DocumentName = "";
     public List<MaterialDto> Materials = new();
     public List<ModelDto> Models = new();

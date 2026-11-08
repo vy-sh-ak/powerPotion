@@ -64,7 +64,7 @@ public sealed class TextureSlotDto
 {
     public string File = "";
     /// <summary>Row-major 3x3 UV transform (engine expects GLM mat3; transmitted as 9 floats m00..m22 row-major).</summary>
-    public float[] Transformation = new float[9]; // identity by default
+    public float[] Transformation = { 1f, 0f, 0f, 0f, 1f, 0f, 0f, 0f, 1f }; // identity by default
     public bool IsInverted;
     public float Brightness = 1f;
     public int Source;      // SlotSource

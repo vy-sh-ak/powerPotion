@@ -26,6 +26,10 @@ public partial class MainWindow : Window
     private bool _anyWorldApplied;
     private WorldSnapshot? _pendingWorld;
     private WorldSnapshot? _lastWorld;
+    private WorldSnapshot? _latestWorld;
+    private bool _worldApplyInFlight;
+    private long _lastWorldRevision;
+    private DispatcherTimer? _worldApplyTimer;
     private readonly NavigationController _nav;
 
     private void OnNavigationCommand(ConsoleCommand cmd)
@@ -93,45 +97,81 @@ public partial class MainWindow : Window
         catch { }
     }
 
+    private void PresentWindow()
+    {
+        ShowInTaskbar = true;
+        if (Left < -10000 || Top < -10000)
+        {
+            Left = _presentLeft;
+            Top = _presentTop;
+        }
+        if (WindowState == WindowState.Minimized)
+            WindowState = WindowState.Normal;
+        Activate();
+    }
+
     private void OnWorldUpdateFinished(int result)
     {
+        _worldApplyInFlight = false;
+
         if (result == 0)
         {
             _anyWorldApplied = true;
-            _surface?.ShowEngineWindow();
-            HideLoading();
             HideRefresh();
             SetStatus("Scene updated.");
+            PresentWindow();
+
+            // Right after the first world switch the engine paints its own "chaos Enscape
+            // Loading …" screen in the render window for a moment (shader/texture warm-up).
+            // Keep the branded splash on top for a short settle period, then reveal the renderer.
+            if (_surface is { IsEngineWindowShown: false })
+            {
+                _splash?.SetStatus("Finalizing renderer…");
+                var delay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
+                delay.Tick += (_, _) =>
+                {
+                    delay.Stop();
+                    _surface?.ShowEngineWindow();
+                    HideLoading();
+                };
+                delay.Start();
+            }
+            else
+            {
+                HideLoading();
+            }
         }
         else
         {
             HideRefresh();
             HideLoading();
+            PresentWindow();
             SetStatus($"Scene update failed ({result}).");
         }
+
+        // Apply the latest queued snapshot (if any) once this commit has fully settled.
+        TryApplyLatestWorld();
     }
 
-    private SplashWindow? _splash;
+    private SplashPresenter? _splash;
 
     private void ShowLoading(string message)
     {
         if (_splash == null)
         {
-            _splash = new SplashWindow();
-            _splash.Show();
-            // force the splash to paint before the (blocking) native engine start
-            Dispatcher.Invoke(DispatcherPriority.Render, new Action(() => { }));
+            _splash = new SplashPresenter();
+            _splash.Show(message);
         }
-        _splash.SetStatus(message);
+        else
+        {
+            _splash.SetStatus(message);
+        }
     }
 
     private void HideLoading()
     {
-        if (_splash != null)
-        {
-            _splash.Close();
-            _splash = null;
-        }
+        _splash?.Close();
+        _splash = null;
     }
 
     private void ShowRefresh()
@@ -196,6 +236,8 @@ public partial class MainWindow : Window
 
     private readonly string _captureDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "PowerPotion");
+    private readonly double _presentLeft;
+    private readonly double _presentTop;
 
     public MainWindow(EngineBridge engine, HostSettings settings, HostConnection? connection)
     {
@@ -209,9 +251,30 @@ public partial class MainWindow : Window
         Title = "PowerPotion — Live Renderer";
         ApplyDarkTitleBar();
 
+        // Start off-screen: the engine start blocks this UI thread for several seconds and a visible
+        // window would make Windows show the busy/loading cursor. The splash lives on its own thread;
+        // the main window is moved on-screen once the renderer is ready.
+        var work = SystemParameters.WorkArea;
+        _presentLeft = work.Left + Math.Max(0, (work.Width - Width) / 2);
+        _presentTop = work.Top + Math.Max(0, (work.Height - Height) / 2);
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        ShowInTaskbar = false;
+        Left = -32000;
+        Top = -32000;
+
         _nav = new NavigationController(_engine);
         _nav.FollowChanged += UpdateNavigationUi;
         _nav.ModeChanged += UpdateNavigationUi;
+
+        // Coalesce world snapshots: Revit can send a burst of full worlds while editing. Apply the
+        // newest one only, and only after the previous engine commit, instead of clearing/rebuilding
+        // the scene dozens of times per second (which keeps the engine on its loading screen).
+        _worldApplyTimer = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromMilliseconds(120),
+        };
+        _worldApplyTimer.Tick += (_, _) => TryApplyLatestWorld();
+        _worldApplyTimer.Start();
 
         // Clicking the render area must focus the native window so the engine receives WASD;
         // clicking the toolbar must not steal focus from the buttons.
@@ -228,9 +291,9 @@ public partial class MainWindow : Window
 
         _engine.Log += m =>
         {
+            // Engine diagnostics stay in the log; the status bar must never surface engine-branded
+            // text/paths (e.g. the installed Enscape directory).
             HostLog.Write("engine: " + m);
-            if (Dispatcher.CheckAccess()) SetStatus(m);
-            else Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() => SetStatus(m)));
         };
         _engine.ClosedFromEngine += () =>
         {
@@ -267,7 +330,7 @@ public partial class MainWindow : Window
             });
         }
 
-        EngineText.Text = "engine " + _engine.EngineVersion;
+        EngineText.Text = "PowerPotion " + Program.ThisVersion();
 
         // r_hwrt/r_dlss are only accepted before the engine is initialized.
         foreach (var cmd in _settings.ToPreInitCommands())
@@ -296,6 +359,7 @@ public partial class MainWindow : Window
                     // splash there until it has a scene, and that native splash used to appear
                     // behind the branded loader. The window is shown on the first world commit.
                     ShowLoading("Renderer ready — waiting for scene from Revit…");
+                    if (!_connectedToRevit) PresentWindow();
                 }
                 _ = _connection?.SendEngineReadyAsync(true, "");
                 if (_pendingWorld != null)
@@ -309,6 +373,7 @@ public partial class MainWindow : Window
             {
                 HostLog.Exception("RendererSurface.EngineFailed", ex);
                 ShowLoading("Renderer failed to start — see logs.");
+                PresentWindow();
                 var hide = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
                 hide.Tick += (_, _) => { hide.Stop(); HideLoading(); };
                 hide.Start();
@@ -324,6 +389,24 @@ public partial class MainWindow : Window
 
     private void OnWorld(WorldSnapshot world)
     {
+        // Transient empty exports (document reopening, view regenerating, stale Revit view) used to
+        // clear the renderer over and over and flash its loading screen. Keep the current scene (or
+        // the branded splash) until a world with geometry arrives.
+        if (world.Models.Count == 0)
+        {
+            HostLog.Write("OnWorld ignored: empty world (scene kept)");
+            if (!_anyWorldApplied)
+                ShowLoading("No visible geometry in the active 3D view — unhide the model or pick another 3D view.");
+            SetStatus("Revit sent an empty scene — keeping the current view.");
+            return;
+        }
+
+        if (world.Revision > 0 && world.Revision <= _lastWorldRevision)
+        {
+            HostLog.Write($"OnWorld ignored: duplicate revision {world.Revision}");
+            return;
+        }
+
         if (!_engineReady)
         {
             // Revit exports and sends the scene immediately after connecting; the native engine
@@ -336,9 +419,32 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Latest wins: a burst of exports results in a single apply of the newest snapshot.
+        _latestWorld = world;
+        if (_anyWorldApplied) ShowRefresh();
+        else ShowLoading("Importing scene from Revit…");
+    }
+
+    /// <summary>Applies the newest queued world, one at a time, after the previous engine commit.</summary>
+    private void TryApplyLatestWorld()
+    {
+        if (!_engineReady || _worldApplyInFlight) return;
+        var world = _latestWorld;
+        if (world == null) return;
+
+        if (world.Revision > 0 && world.Revision <= _lastWorldRevision)
+        {
+            _latestWorld = null;
+            return;
+        }
+
+        _latestWorld = null;
+        _worldApplyInFlight = true;
+        if (world.Revision > 0) _lastWorldRevision = world.Revision;
+
         SetStatus($"Received world '{world.ViewName}' — {world.Models.Count} models, {world.Materials.Count} materials, {world.Lights.Count} lights. Updating…");
         HostLog.Write($"OnWorld apply: {world.Models.Count} models, {world.Instances.Count} instances, " +
-                      $"{world.Materials.Count} materials, {world.Lights.Count} lights");
+                      $"{world.Materials.Count} materials, {world.Lights.Count} lights (rev {world.Revision})");
         if (!_anyWorldApplied) ShowLoading("Importing scene from Revit…");
         else ShowRefresh();
         try
@@ -347,6 +453,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
+            _worldApplyInFlight = false;
             HostLog.Exception("ApplyWorld", ex);
             SetStatus("Renderer rejected the scene — see logs.");
             return;

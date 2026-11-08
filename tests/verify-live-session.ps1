@@ -39,6 +39,18 @@ $worldSent = ([regex]::Matches($revitText, 'World sent')).Count
 $worldApplies = ([regex]::Matches($hostText, 'OnWorld apply:')).Count
 $worldCommits = ([regex]::Matches($hostText, 'World update finished: 0')).Count
 
+# Detect full-export storms: consecutive exports closer than 400 ms (the old Idling loop produced
+# dozens; normal edits are debounced to one export per ~500 ms quiet period).
+$exportStamps = @()
+foreach ($m in [regex]::Matches($revitText, '(?m)^(\d{2}:\d{2}:\d{2}\.\d{3}) \[revit\] Exported')) {
+    $exportStamps += [datetime]::ParseExact($m.Groups[1].Value, 'HH:mm:ss.fff',
+        [System.Globalization.CultureInfo]::InvariantCulture)
+}
+$closeExports = 0
+for ($i = 1; $i -lt $exportStamps.Count; $i++) {
+    if (($exportStamps[$i] - $exportStamps[$i - 1]).TotalMilliseconds -lt 400) { $closeExports++ }
+}
+
 Check 'renderer host started'                    ($hostText -match '---- host start ----')
 Check 'single embedded render window'            ($hostText -match 'Embedded engine window')
 Check 'scene received from Revit'                ($worldApplies -ge 1) "world applies: $worldApplies"
@@ -47,8 +59,11 @@ Check 'camera streaming (>= 30 Hz updates)'      ($cameraUpdates -ge $MinimumCam
 Check 'initial export sent by Revit'             ($exports -ge 1 -and $worldSent -ge 1) "exports: $exports, world sent: $worldSent"
 if ($RequireLiveEdit) {
     Check 'live edit triggered a second export'  ($exports -ge 2) "exports: $exports"
-    Check 'DocumentChanged queued an export'     ($revitText -match 'document changed -> export queued')
+    Check 'live edits are debounced'             ($revitText -match 'export queued \(debounced\)')
 }
+Check 'material textures resolved'               ($revitText -notmatch 'texture unresolved')
+Check 'no full-export storm while idle'          ($closeExports -le 4) "exports <400 ms apart: $closeExports"
+Check 'world updates coalesced'                  ($worldApplies -le ($exports + 2)) "applies: $worldApplies, exports: $exports"
 if ($RequireNavigation) {
     Check 'free navigation detached from Revit' ($hostText -match 'nav ui: follow=False')
     Check 'keyboard navigation input seen'       ($hostText -match 'nav input: keyboard')

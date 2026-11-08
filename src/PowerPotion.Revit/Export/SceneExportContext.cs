@@ -33,7 +33,7 @@ public sealed class SceneExportContext : IExportContext
     private readonly HashSet<int> _modelIdsUsed = new();
 
     private ElementId _currentMaterialId = ElementId.InvalidElementId;
-    private MaterialNode? _currentMaterialNode;
+    private MaterialDto? _currentMaterialDto;
     private int _elementDepth;
     private int _currentElementModelId;
     private ulong _currentFamilyClass;
@@ -142,8 +142,11 @@ public sealed class SceneExportContext : IExportContext
 
     public void OnMaterial(MaterialNode node)
     {
-        _currentMaterialNode = node;
         _currentMaterialId = node.MaterialId;
+        // MaterialNode is a transient wrapper: resolve it here, inside the callback, and keep the
+        // DTO. Using the node later in OnPolymesh throws (and used to drop all geometry).
+        try { _currentMaterialDto = _materials.GetOrParse(node); }
+        catch { _currentMaterialDto = null; }
     }
 
     public void OnPolymesh(PolymeshTopology topology)
@@ -180,7 +183,7 @@ public sealed class SceneExportContext : IExportContext
         _groups.Clear();
         _vertexBase = 0;
         _currentMaterialId = ElementId.InvalidElementId;
-        _currentMaterialNode = null;
+        _currentMaterialDto = null;
     }
 
     private void AppendPolymesh(PolymeshTopology topology)
@@ -194,7 +197,8 @@ public sealed class SceneExportContext : IExportContext
 
         // material group start for this polymesh run
         var groupIdStart = (uint)_indices.Count;
-        var matDto = _currentMaterialId != ElementId.InvalidElementId ? _materials.GetOrParse(_currentMaterialId) : null;
+        var matDto = _currentMaterialDto
+            ?? (_currentMaterialId != ElementId.InvalidElementId ? _materials.GetOrParse(_currentMaterialId) : null);
         int materialEngineId = matDto?.Id ?? 0;
 
         var uvs = topology.NumberOfUVs > 0 ? topology.GetUVs() : null;
