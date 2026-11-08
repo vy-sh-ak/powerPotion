@@ -94,51 +94,76 @@ public sealed class PowerPotionApp : IExternalApplication
         AddButton(panelControl, new PushButtonData(
             "PowerPotionStartLive", "Start\nLive Render", assemblyPath,
             typeof(StartLiveCommand).FullName),
-            "Start real-time rendering of the active 3D view.");
+            "Start real-time rendering of the active 3D view.", "start");
 
         AddButton(panelControl, new PushButtonData(
             "PowerPotionStopLive", "Stop", assemblyPath,
             typeof(StopLiveCommand).FullName),
-            "Stop the live render session.");
+            "Stop the live render session.", "stop");
 
         AddButton(panelControl, new PushButtonData(
             "PowerPotionPauseLive", "Pause\nUpdates", assemblyPath,
             typeof(PauseLiveCommand).FullName),
-            "Pause/resume pushing model changes to the renderer.");
+            "Pause/resume pushing model changes to the renderer.", "pause");
 
         AddButton(panelTools, new PushButtonData(
             "PowerPotionScreenshot", "Capture\nImage", assemblyPath,
             typeof(ScreenshotCommand).FullName),
-            "Save a high-resolution image of the current renderer view.");
+            "Save a high-resolution image of the current renderer view.", "capture");
 
         AddButton(panelTools, new PushButtonData(
             "PowerPotionPanorama", "Capture\nPanorama", assemblyPath,
             typeof(PanoramaCommand).FullName),
-            "Save a 360° panorama from the current renderer view.");
+            "Save a 360° panorama from the current renderer view.", "panorama");
 
         AddButton(panelTools, new PushButtonData(
             "PowerPotionMaterials", "Material\nEditor", assemblyPath,
             typeof(MaterialEditorCommand).FullName),
-            "Edit Enscape-style material overrides for the current document.");
+            "Edit Enscape-style material overrides for the current document.", "material");
 
         AddButton(panelTools, new PushButtonData(
             "PowerPotionSun", "Sun &&\nLocation", assemblyPath,
             typeof(SunCommand).FullName),
-            "Re-push sun, date and location to the renderer.");
+            "Re-push sun, date and location to the renderer.", "sun");
 
         AddButton(panelHelp, new PushButtonData(
             "PowerPotionAbout", "About", assemblyPath,
             typeof(AboutCommand).FullName),
-            "About PowerPotion.");
+            "About PowerPotion.", "about");
     }
 
-    private void AddButton(RibbonPanel panel, PushButtonData data, string tooltip)
+    private void AddButton(RibbonPanel panel, PushButtonData data, string tooltip, string icon)
     {
         var button = panel.AddItem(data) as PushButton;
         if (button != null)
         {
             button.ToolTip = tooltip;
             button.AvailabilityClassName = typeof(AlwaysAvailable).FullName;
+            // Revit icon rules: 16x16 for the small button image, 32x32 for the large image,
+            // PNG with transparency at 96 DPI (both embedded in the add-in assembly).
+            button.Image = LoadIcon(icon, 16);
+            button.LargeImage = LoadIcon(icon, 32);
+        }
+    }
+
+    private static System.Windows.Media.Imaging.BitmapImage? LoadIcon(string name, int size)
+    {
+        try
+        {
+            var assembly = Assembly.GetExecutingAssembly();
+            using var stream = assembly.GetManifestResourceStream($"PowerPotion.Revit.Icons.{name}{size}.png");
+            if (stream == null) return null;
+            var bitmap = new System.Windows.Media.Imaging.BitmapImage();
+            bitmap.BeginInit();
+            bitmap.StreamSource = stream;
+            bitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+            bitmap.EndInit();
+            bitmap.Freeze();
+            return bitmap;
+        }
+        catch
+        {
+            return null;
         }
     }
 

@@ -10,6 +10,7 @@
     <AssemblyTitle>PowerPotion Host</AssemblyTitle>
     <Product>PowerPotion</Product>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\powerpotion.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <InvariantGlobalization>false</InvariantGlobalization>
     <!-- Location of the installed Enscape product that provides the rendering engine. -->
@@ -18,6 +19,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PowerPotion.Protocol\PowerPotion.Protocol.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\**\*" />
   </ItemGroup>
 
   <!--

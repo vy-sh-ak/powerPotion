@@ -25,7 +25,23 @@ public partial class MaterialEditorWindow : System.Windows.Window
                 "Autodesk", "RVT", "Materials", "Textures"),
         });
         InitializeComponent();
+        ApplyDarkTitleBar();
         LoadMaterials();
+    }
+
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    private void ApplyDarkTitleBar()
+    {
+        try
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
+            var value = 1;
+            if (DwmSetWindowAttribute(hwnd, 20, ref value, sizeof(int)) != 0)
+                DwmSetWindowAttribute(hwnd, 19, ref value, sizeof(int));
+        }
+        catch { }
     }
 
     private void LoadMaterials()

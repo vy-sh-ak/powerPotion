@@ -4,8 +4,55 @@
         Title="PowerPotion — Live Renderer"
         Width="1400" Height="860"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1E22"
+        Background="#140B22"
+        Foreground="#EAE2F8"
+        Icon="Assets/powerpotion.ico"
         UseLayoutRounding="True">
+
+    <Window.Resources>
+        <SolidColorBrush x:Key="AccentBrush" Color="#B388FF"/>
+        <SolidColorBrush x:Key="GoldBrush" Color="#F5B544"/>
+        <SolidColorBrush x:Key="PanelBrush" Color="#1E1230"/>
+        <SolidColorBrush x:Key="PanelBorderBrush" Color="#372353"/>
+        <SolidColorBrush x:Key="TextPrimaryBrush" Color="#EAE2F8"/>
+        <SolidColorBrush x:Key="TextMutedBrush" Color="#A996C9"/>
+
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#2E1B47"/>
+            <Setter Property="Foreground" Value="#F1EAFE"/>
+            <Setter Property="BorderBrush" Value="#5B3E86"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#3D2460"/>
+                    <Setter Property="BorderBrush" Value="#8A63C4"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#4B2D76"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Opacity" Value="0.45"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#2E1B47"/>
+            <Setter Property="Foreground" Value="#F1EAFE"/>
+            <Setter Property="BorderBrush" Value="#5B3E86"/>
+        </Style>
+
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#D8CCF0"/>
+        </Style>
+
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Foreground" Value="#EAE2F8"/>
+        </Style>
+    </Window.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -14,22 +61,24 @@
         </Grid.RowDefinitions>
 
         <!-- ================= Toolbar ================= -->
-        <Border Grid.Row="0" Background="#26262B" BorderBrush="#333338" BorderThickness="0,0,0,1" Padding="8,5">
+        <Border Grid.Row="0" Background="#1E1230" BorderBrush="#372353" BorderThickness="0,0,0,1" Padding="8,5">
             <DockPanel>
-                <TextBlock DockPanel.Dock="Left" Text="⚡ PowerPotion" FontSize="15" FontWeight="Bold"
-                           Foreground="#7C4DFF" VerticalAlignment="Center" Margin="0,0,14,0"/>
-                <TextBlock x:Name="DocLabel" DockPanel.Dock="Right" Foreground="#9E9EA6" FontSize="11"
+                <Image DockPanel.Dock="Left" Source="Assets/logo32.png" Width="24" Height="24"
+                       RenderOptions.BitmapScalingMode="HighQuality" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                <TextBlock DockPanel.Dock="Left" Text="PowerPotion" FontSize="15" FontWeight="Bold"
+                           Foreground="#B388FF" VerticalAlignment="Center" Margin="0,0,14,0"/>
+                <TextBlock DockPanel.Dock="Right" x:Name="DocLabel" Foreground="#A996C9" FontSize="11"
                            VerticalAlignment="Center" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" Text=""/>
                 <StackPanel Orientation="Horizontal">
-                    <Button x:Name="BtnLive" Content="⏸ Pause Updates" Click="OnToggleLive" Padding="10,4" Margin="0,0,6,0"/>
-                    <Button x:Name="BtnNavMode" Content="🛫 Fly" Click="OnToggleNavMode" Padding="10,4" Margin="0,0,6,0"
+                    <Button x:Name="BtnLive" Content="⏸ Pause Updates" Click="OnToggleLive" Margin="0,0,6,0"/>
+                    <Button x:Name="BtnNavMode" Content="🛫 Fly" Click="OnToggleNavMode" Margin="0,0,6,0"
                             ToolTip="Toggle walk / fly navigation"/>
-                    <Button x:Name="BtnFollow" Content="🔗 Follow Revit: on" Click="OnToggleFollow" Padding="10,4" Margin="0,0,6,0"
+                    <Button x:Name="BtnFollow" Content="🔗 Follow Revit: on" Click="OnToggleFollow" Margin="0,0,6,0"
                             ToolTip="Re-attach the camera to the Revit view"/>
-                    <Button Content="📷 Screenshot" Click="OnScreenshot" Padding="10,4" Margin="0,0,6,0"/>
-                    <Button Content="🌐 Panorama" Click="OnPanorama" Padding="10,4" Margin="0,0,6,0"/>
-                    <Button x:Name="BtnSettings" Content="🎛 Visual Settings" Click="OnToggleSettings" Padding="10,4" Margin="0,0,6,0"/>
-                    <Button x:Name="BtnMaterials" Content="🎨 Materials" Click="OnToggleMaterials" Padding="10,4" Margin="0,0,6,0"/>
+                    <Button Content="📷 Screenshot" Click="OnScreenshot" Margin="0,0,6,0"/>
+                    <Button Content="🌐 Panorama" Click="OnPanorama" Margin="0,0,6,0"/>
+                    <Button x:Name="BtnSettings" Content="🎛 Visual Settings" Click="OnToggleSettings" Margin="0,0,6,0"/>
+                    <Button x:Name="BtnMaterials" Content="🎨 Materials" Click="OnToggleMaterials" Margin="0,0,6,0"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -42,17 +91,17 @@
             </Grid.ColumnDefinitions>
 
             <!-- renderer surface (native child HWND, added in code-behind) -->
-            <Grid x:Name="SurfaceHost" Grid.Column="0" Background="#101014"/>
+            <Grid x:Name="SurfaceHost" Grid.Column="0" Background="#0F0818"/>
 
             <!-- sidebar -->
-            <Border x:Name="Sidebar" Grid.Column="1" Background="#222228" BorderBrush="#333338" BorderThickness="1,0,0,0">
+            <Border x:Name="Sidebar" Grid.Column="1" Background="#1B1029" BorderBrush="#372353" BorderThickness="1,0,0,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <TextBlock x:Name="SidebarTitle" Grid.Row="0" Text="Visual Settings" FontSize="13" FontWeight="SemiBold"
-                               Foreground="#EAEAEA" Margin="12,10,12,8"/>
+                               Foreground="#EAE2F8" Margin="12,10,12,8"/>
                     <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
                         <StackPanel x:Name="SidebarContent" Margin="12,0,12,12"/>
                     </ScrollViewer>
@@ -61,15 +110,15 @@
         </Grid>
 
         <!-- ================= Status bar ================= -->
-        <Border Grid.Row="2" Background="#26262B" BorderBrush="#333338" BorderThickness="0,1,0,0" Padding="10,4">
+        <Border Grid.Row="2" Background="#1E1230" BorderBrush="#372353" BorderThickness="0,1,0,0" Padding="10,4">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="StatusText" Grid.Column="0" Foreground="#9E9EA6" FontSize="11" Text="Starting…"/>
-                <TextBlock x:Name="EngineText" Grid.Column="2" Foreground="#6E6E76" FontSize="11" Text=""/>
+                <TextBlock x:Name="StatusText" Grid.Column="0" Foreground="#A996C9" FontSize="11" Text="Starting…"/>
+                <TextBlock x:Name="EngineText" Grid.Column="2" Foreground="#7E6C9E" FontSize="11" Text=""/>
             </Grid>
         </Border>
     </Grid>

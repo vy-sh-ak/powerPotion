@@ -72,6 +72,21 @@ public partial class MainWindow : Window
         catch (Exception ex) { HostLog.Exception("pp_nav", ex); }
     }
 
+    [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
+
+    private void ApplyDarkTitleBar()
+    {
+        try
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle();
+            var value = 1;
+            if (DwmSetWindowAttribute(hwnd, 20, ref value, sizeof(int)) != 0)
+                DwmSetWindowAttribute(hwnd, 19, ref value, sizeof(int));
+        }
+        catch { }
+    }
+
     private void UpdateNavigationUi()
     {
         BtnNavMode.Content = _nav.Mode == NavigationController.NavigationMode.Walk ? "🚶 Walk" : "🛫 Fly";
@@ -103,6 +118,7 @@ public partial class MainWindow : Window
 
         InitializeComponent();
         Title = "PowerPotion — Live Renderer";
+        ApplyDarkTitleBar();
 
         _nav = new NavigationController(_engine);
         _nav.FollowChanged += UpdateNavigationUi;
@@ -361,7 +377,7 @@ public partial class MainWindow : Window
         SidebarContent.Children.Add(new TextBlock
         {
             Text = title,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0x7C, 0xFF)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xB3, 0x88, 0xFF)),
             FontWeight = FontWeights.Bold,
             FontSize = 12,
             Margin = new Thickness(0, 16, 0, 6),
@@ -372,11 +388,11 @@ public partial class MainWindow : Window
     {
         var sp = new StackPanel { Margin = new Thickness(0, 4, 0, 4) };
         var header = new DockPanel();
-        var tb = new TextBlock { Text = label, Foreground = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xD0)), FontSize = 11 };
+        var tb = new TextBlock { Text = label, Foreground = new SolidColorBrush(Color.FromRgb(0xD8, 0xCC, 0xF0)), FontSize = 11 };
         var val = new TextBlock
         {
             Text = value.ToString("0.##"),
-            Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x90)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xA9, 0x96, 0xC9)),
             FontSize = 11,
         };
         DockPanel.SetDock(val, Dock.Right);
@@ -407,7 +423,7 @@ public partial class MainWindow : Window
         {
             Content = label,
             IsChecked = value,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xD0)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xD8, 0xCC, 0xF0)),
             FontSize = 11,
             Margin = new Thickness(0, 4, 0, 4),
         };
@@ -422,7 +438,7 @@ public partial class MainWindow : Window
         sp.Children.Add(new TextBlock
         {
             Text = label,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xD0)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xD8, 0xCC, 0xF0)),
             FontSize = 11,
         });
         var combo = new ComboBox();
@@ -444,7 +460,7 @@ public partial class MainWindow : Window
         sp.Children.Add(new TextBlock
         {
             Text = label,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xD0)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xD8, 0xCC, 0xF0)),
             FontSize = 11,
         });
         var dock = new DockPanel();
@@ -475,7 +491,7 @@ public partial class MainWindow : Window
         var path = new TextBlock
         {
             Text = string.IsNullOrEmpty(current) ? "(engine default sky)" : System.IO.Path.GetFileName(current),
-            Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x90)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xA9, 0x96, 0xC9)),
             FontSize = 10,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
@@ -516,7 +532,7 @@ public partial class MainWindow : Window
         {
             Text = $"{_materials.Count} materials in scene. Select one to tweak it live in the renderer " +
                    "(changes are session-only; use the Material Editor in Revit to write back).",
-            Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x90)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xA9, 0x96, 0xC9)),
             FontSize = 10,
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 8),
@@ -526,7 +542,7 @@ public partial class MainWindow : Window
         var list = new ListBox { Background = Brushes.Transparent, BorderThickness = new Thickness(0) };
         foreach (var m in _materials)
         {
-            var item = new ListBoxItem { Content = m.Name, Foreground = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xD0)) };
+            var item = new ListBoxItem { Content = m.Name, Foreground = new SolidColorBrush(Color.FromRgb(0xD8, 0xCC, 0xF0)) };
             item.Selected += (_, _) => ShowMaterialEditor(m);
             list.Items.Add(item);
         }
@@ -575,7 +591,7 @@ public partial class MainWindow : Window
     private void AddMaterialSlider(string label, Action<float> set, float initial)
     {
         var sp = new StackPanel { Margin = new Thickness(0, 4, 0, 4) };
-        sp.Children.Add(new TextBlock { Text = label, Foreground = new SolidColorBrush(Color.FromRgb(0xC8, 0xC8, 0xD0)), FontSize = 11 });
+        sp.Children.Add(new TextBlock { Text = label, Foreground = new SolidColorBrush(Color.FromRgb(0xD8, 0xCC, 0xF0)), FontSize = 11 });
         var slider = new Slider { Minimum = 0, Maximum = 1, Value = Math.Clamp(initial, 0, 1) };
         slider.ValueChanged += (_, _) => set((float)slider.Value);
         sp.Children.Add(slider);

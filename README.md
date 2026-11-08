@@ -1,5 +1,9 @@
 # PowerPotion ⚡
 
+<p align="center">
+  <img src="assets/branding/logo-badge.png" width="150" alt="PowerPotion logo"/>
+</p>
+
 **A personalized, clean-room re-implementation of the Chaos Enscape Revit plugin** — real-time
 rendering, material editing, sun/location, cloud & sky, and capture — **without VR and without
 authentication**, packaged as a single installer with a clean uninstaller.
@@ -14,6 +18,7 @@ Anything the engine enforces internally (including entitlement) stays fully in e
 
 ```
 power-potion/
+├── assets/branding/              # logo (SVG/PNG/ICO), ribbon icons, installer art
 ├── docs/                          # REA evidence reports + architecture notes
 │   ├── ARCHITECTURE.md            # how Enscape works + how PowerPotion maps onto it
 │   ├── rea-report-revit-plugin.md # full REA analysis of Enscape's Revit add-in
@@ -90,6 +95,23 @@ build.cmd
 
 Full evidence trail, API surface maps and the empirical calibration notes:
 **docs/ARCHITECTURE.md**.
+
+## Branding
+
+The dark-purple theme and potion mark live in `assets/branding/`:
+
+* `logo.svg` / `logo-badge.svg` — vector source, plus PNGs at 512/256/32/16 px.
+* `powerpotion.ico` — multi-size application/installer icon.
+* `icons/*.svg` and `ribbon-icons.png` — the eight Revit ribbon glyphs.
+* `installer/wizard*.bmp` — Inno Setup wizard artwork.
+
+The Revit add-in embeds 16×16 and 32×32 PNGs (Revit's icon rules) in
+`PowerPotion.Revit.dll`; the host window, taskbar icon, installer and Start-menu
+shortcut use the same mark. Everything is generated from one vector definition:
+
+```cmd
+dotnet run --project tools\BrandGen
+```
 
 ## Legal
 

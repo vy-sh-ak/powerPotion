@@ -138,6 +138,21 @@ the decompiled Revit plugin, and controlled renders on the installed engine:
   automated testing of the camera path (used by `tests/PowerPotion.SmokeTest`, including a
   `--real-input` mode that injects real `W`/right-drag/wheel events with `SendInput`).
 
+## Branding & theme
+
+The potion mark and the dark-purple theme are generated from one vector definition
+(`tools/BrandGen`) into `assets/branding/`:
+
+* SVG + PNG (512/256/32/16) for the logo, a multi-size `powerpotion.ico`, and
+  `ribbon-icons.png` as a visual index.
+* Eight 16×16 and 32×32 PNG ribbon glyphs (`start`, `stop`, `pause`, `capture`,
+  `panorama`, `material`, `sun`, `about`) embedded in `PowerPotion.Revit.dll`
+  (Revit icon rules: 16/32 px, 32-bit PNG, transparent, 96 DPI).
+* Inno Setup wizard bitmaps and the setup icon.
+
+The host WPF window uses the same palette (deep violet `#140B22` / `#1E1230`, accent
+`#B388FF`, gold `#F5B544`) with a dark immersive title bar and the logo in the toolbar.
+
 ## Legal / ethical scope
 
 * PowerPotion **does not modify, patch, or redistribute** any Chaos/Enscape binary. It *uses* the

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+<ellipse cx="256" cy="486" rx="118" ry="16"  fill="#000000" fill-opacity="0.22"/>
+<polygon points="126,250 256,178 386,250 256,322 126,250 386,250 386,418 256,496 126,418"  fill="#2E2350"/>
+<polygon points="126,250 256,178 386,250 256,322"  fill="#A78BFA" fill-opacity="0.85"/>
+<polygon points="126,250 256,322 256,496 126,418"  fill="#7C3AED"/>
+<polygon points="386,250 386,418 256,496 256,322"  fill="#6D2FE0"/>
+<polygon points="160,268 256,218 352,268 256,318"  fill="#B794FF" fill-opacity="0.85"/>
+<polygon points="142,266 156,272 156,388 142,380"  fill="#FFFFFF" fill-opacity="0.16"/>
+<polygon points="256,322 372,256 374,262 262,330"  fill="#FFFFFF" fill-opacity="0.1"/>
+<polygon points="226,146 286,146 298,210 214,210"  fill="#C7B3F5" fill-opacity="0.95"/>
+<polygon points="234,162 278,162 288,206 224,206"  fill="#7C3AED"/>
+<rect x="218" y="76" width="76" height="82" rx="10"  fill="#D9B77E"/>
+<ellipse cx="256" cy="80" rx="34" ry="10"  fill="#EAD2A3"/>
+<rect x="218" y="142" width="76" height="14" rx="6"  fill="#C49A63"/>
+<rect x="218" y="104" width="76" height="4" rx="2"  fill="#C49A63" fill-opacity="0.55"/>
+<rect x="218" y="120" width="76" height="3" rx="1.5"  fill="#C49A63" fill-opacity="0.45"/>
+<ellipse cx="256" cy="208" rx="54" ry="14"  fill="none" stroke="#8B5A2B" stroke-width="10"/>
+<ellipse cx="302" cy="212" rx="11" ry="9"  fill="#7A4B24"/>
+<path d="M 302 220 C 318 232 320 248 306 262"  fill="#8B5A2B" stroke="#8B5A2B" stroke-width="9"/>
+<path d="M 292 220 C 284 236 288 250 300 258"  fill="#8B5A2B" stroke="#6B4423" stroke-width="7"/>
+<rect x="310" y="274" width="112" height="112" rx="16"  fill="#2B2338" stroke="#6D5B8F" stroke-width="4" transform="rotate(-16 366 330)"/>
+<path d="M 366 286 L 330 344 L 356 344 L 340 392 L 392 326 L 364 326 Z"  fill="#F5B544" stroke="#C98A1E" stroke-width="3" transform="rotate(-16 366 330)"/>
+<path d="M 362 298 L 343 335 L 360 335 L 350 363 L 375 322 L 360 322 Z"  fill="#FFE29A" fill-opacity="0.75" transform="rotate(-16 366 330)"/>
+</svg>

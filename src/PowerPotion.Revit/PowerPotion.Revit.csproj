@@ -38,6 +38,12 @@
   <!-- install the .addin manifest next to the output -->
   <ItemGroup>
     <None Include="PowerPotion.addin" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- Revit ribbon icons: 16x16 / 32x32 PNG embedded in the add-in assembly -->
+  <ItemGroup>
+    <EmbeddedResource Include="Icons\*.png" />
+    <Resource Include="Assets\*.png" />
   </ItemGroup>  <Target Name="EnsureRevitApi" BeforeTargets="ResolveAssemblyReferences">
     <Error Text="RevitAPI.dll not found. Set RevitDir to the Revit 2026 install directory." Condition="!Exists('$(RevitDir)\RevitAPI.dll')" />
   </Target>

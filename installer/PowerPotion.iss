@@ -28,6 +28,9 @@ LicenseFile=..\LICENSE.txt
 InfoBeforeFile=..\README.md
 UninstallDisplayName={#PowerPotionName} for Revit
 UninstallDisplayIcon={app}\PowerPotion.Host.exe
+SetupIconFile=..\assets\branding\powerpotion.ico
+WizardImageFile=wizard.bmp
+WizardSmallImageFile=wizard-small.bmp
 
 [Messages]
 WelcomeLabel2=This will install [name/ver] — a personalized real-time rendering companion for Autodesk Revit that reuses the rendering engine of your installed Enscape product.%n%nPrerequisites:%n• Autodesk Revit 2026%n• Enscape 4.7+ (installed and licensed separately — PowerPotion does not modify it)%n%nThe installer places the add-in in your per-user Revit Addins folder. No administrator rights needed.
@@ -98,6 +101,9 @@ Type: filesandordirs; Name: "{userdocs}\PowerPotion"
 [Run]
 Filename: "{app}\PowerPotion.Host.exe"; Parameters: "--locate"; Description: "Verify the rendering engine is found"; Flags: runhidden skipifsilent
 Filename: "https://github.com/"; Description: "Open the documentation"; Flags: postinstall shellexec unchecked
+
+[Icons]
+Name: "{group}\PowerPotion"; Filename: "{app}\PowerPotion.Host.exe"; Comment: "PowerPotion — live renderer for Revit"
 
 [UninstallRun]
 ; ensure the renderer host is not running during uninstall
