@@ -58,6 +58,7 @@ public sealed class EngineBridge : IDisposable
     public event Action<string>? Log;
     public event Action? ClosedFromEngine;
     public event Action<bool>? CaptureFinished;
+    public event Action<int>? WorldUpdateFinished;
 
     /// <summary>Console commands passed to the engine before initialization (e.g. r_hwrt, r_dlss).</summary>
     public List<string> PreInitCommands { get; } = new();
@@ -373,6 +374,13 @@ public sealed class EngineBridge : IDisposable
         }
         catch (Exception ex) { LogLine("Scope probe failed: " + ex.Message); }
 
+        try
+        {
+            if (_scope?.TryGetWindowApi(out var windowApi) == true)
+                windowApi.SetConsoleEnabled(false);
+        }
+        catch { }
+
         var hwnd = IntPtr.Zero;
         EnscapeNativeWindowApi.EnscapeEmbeddedWindow_GetNativeWindowHandle(_instance, out hwnd);
         NativeWindowHandle = hwnd;
@@ -398,11 +406,16 @@ public sealed class EngineBridge : IDisposable
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern IntPtr SetFocus(IntPtr hWnd);
 
-    /// <summary>Gives keyboard focus to the native render window (diagnostics / input tests).</summary>
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr GetFocus();
+
+    /// <summary>Gives keyboard focus to the native render window (needed for engine-side navigation).</summary>
     public void FocusRenderWindow()
     {
-        if (NativeWindowHandle != IntPtr.Zero)
-            SetFocus(NativeWindowHandle);
+        if (NativeWindowHandle == IntPtr.Zero) return;
+        SetFocus(NativeWindowHandle);
+        NotifyFocus(true);
+        HostLog.Write($"focus: engine=0x{NativeWindowHandle:X} focus=0x{GetFocus().ToInt64():X}");
     }
 
     public async Task StopAsync()
@@ -473,7 +486,7 @@ public sealed class EngineBridge : IDisposable
     }
 
     /// <summary>Replaces the whole world with the given snapshot.</summary>
-    public void ApplyWorld(WorldSnapshot world)
+    public void ApplyWorld(WorldSnapshot world, bool applyCamera = true)
     {
         var worldApi = World();
         worldApi.ClearWorld();
@@ -508,11 +521,12 @@ public sealed class EngineBridge : IDisposable
         _onWorldUpdated = code =>
         {
             LogLine($"World update finished: {code}");
+            WorldUpdateFinished?.Invoke(code);
         };
         worldApi.UpdateWorld(_onWorldUpdated);
 
         ApplySun(world.Sun);
-        ApplyCamera(world.Camera);
+        if (applyCamera) ApplyCamera(world.Camera);
     }
 
     private void AddMaterial(IEnscapeWorldApi worldApi, MaterialDto dto)

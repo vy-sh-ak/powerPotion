@@ -14,8 +14,21 @@ internal static class RealInput
     private const uint MOUSEEVENTF_MOVE = 0x0001;
     private const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
     private const uint MOUSEEVENTF_RIGHTUP = 0x0010;
+    private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    private const uint MOUSEEVENTF_LEFTUP = 0x0004;
     private const uint MOUSEEVENTF_WHEEL = 0x0800;
     private const int SW_RESTORE = 9;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetShellWindow();
+
+    public static bool ActivateShell()
+    {
+        var shell = GetShellWindow();
+        if (shell == IntPtr.Zero) return false;
+        ShowWindow(shell, SW_RESTORE);
+        return SetForegroundWindow(shell);
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT { public int X; public int Y; }
@@ -157,6 +170,31 @@ internal static class RealInput
             U = new InputUnion { mi = new MOUSEINPUT { dwFlags = down ? MOUSEEVENTF_RIGHTDOWN : MOUSEEVENTF_RIGHTUP } },
         };
         SendInput(1, new[] { input }, InputSize);
+    }
+
+    public static void LeftButton(bool down)
+    {
+        var input = new INPUT
+        {
+            type = INPUT_MOUSE,
+            U = new InputUnion { mi = new MOUSEINPUT { dwFlags = down ? MOUSEEVENTF_LEFTDOWN : MOUSEEVENTF_LEFTUP } },
+        };
+        SendInput(1, new[] { input }, InputSize);
+    }
+
+    public static void LeftClick()
+    {
+        var down = new INPUT
+        {
+            type = INPUT_MOUSE,
+            U = new InputUnion { mi = new MOUSEINPUT { dwFlags = MOUSEEVENTF_LEFTDOWN } },
+        };
+        var up = new INPUT
+        {
+            type = INPUT_MOUSE,
+            U = new InputUnion { mi = new MOUSEINPUT { dwFlags = MOUSEEVENTF_LEFTUP } },
+        };
+        SendInput(2, new[] { down, up }, InputSize);
     }
 
     public static void Wheel(int delta)

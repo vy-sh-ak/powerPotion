@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using PowerPotion.Host.Enscape;
 using PowerPotion.Host.Net;
@@ -22,7 +23,9 @@ public partial class MainWindow : Window
     private bool _suppressPanelEvents;
     private bool _engineReady;
     private readonly bool _connectedToRevit;
+    private bool _anyWorldApplied;
     private WorldSnapshot? _pendingWorld;
+    private WorldSnapshot? _lastWorld;
     private readonly NavigationController _nav;
 
     private void OnNavigationCommand(ConsoleCommand cmd)
@@ -56,6 +59,9 @@ public partial class MainWindow : Window
                 case "fov" when parts.Length > 2:
                     _nav.SetFov(float.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture));
                     break;
+                case "ground" when parts.Length > 2:
+                    _nav.SetGroundY(float.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture));
+                    break;
                 case "focus":
                     _engine.FocusRenderWindow();
                     break;
@@ -87,6 +93,61 @@ public partial class MainWindow : Window
         catch { }
     }
 
+    private void OnWorldUpdateFinished(int result)
+    {
+        if (result == 0)
+        {
+            _anyWorldApplied = true;
+            _surface?.ShowEngineWindow();
+            HideLoading();
+            HideRefresh();
+            SetStatus("Scene updated.");
+        }
+        else
+        {
+            HideRefresh();
+            HideLoading();
+            SetStatus($"Scene update failed ({result}).");
+        }
+    }
+
+    private SplashWindow? _splash;
+
+    private void ShowLoading(string message)
+    {
+        if (_splash == null)
+        {
+            _splash = new SplashWindow();
+            _splash.Show();
+            // force the splash to paint before the (blocking) native engine start
+            Dispatcher.Invoke(DispatcherPriority.Render, new Action(() => { }));
+        }
+        _splash.SetStatus(message);
+    }
+
+    private void HideLoading()
+    {
+        if (_splash != null)
+        {
+            _splash.Close();
+            _splash = null;
+        }
+    }
+
+    private void ShowRefresh()
+    {
+        if (RefreshBadge.Visibility == Visibility.Visible) return;
+        RefreshBadge.Visibility = Visibility.Visible;
+        RefreshSpin.BeginAnimation(RotateTransform.AngleProperty,
+            new DoubleAnimation(0, 360, TimeSpan.FromSeconds(1.0)) { RepeatBehavior = RepeatBehavior.Forever });
+    }
+
+    private void HideRefresh()
+    {
+        RefreshSpin.BeginAnimation(RotateTransform.AngleProperty, null);
+        RefreshBadge.Visibility = Visibility.Collapsed;
+    }
+
     private void UpdateNavigationUi()
     {
         BtnNavMode.Content = _nav.Mode == NavigationController.NavigationMode.Walk ? "🚶 Walk" : "🛫 Fly";
@@ -94,16 +155,44 @@ public partial class MainWindow : Window
         HostLog.Write($"nav ui: follow={_nav.FollowRevit} mode={_nav.Mode}");
         SetStatus(_nav.FollowRevit
             ? "Following the Revit view."
-            : $"Free look ({_nav.Mode}) — W/A/S/D, RMB look, wheel, Shift/Ctrl; Q/E in fly mode.");
+            : $"Free look ({_nav.Mode}) — W/A/S/D, drag look, wheel, Shift/Ctrl; Q/E in fly mode.");
     }
 
-    private void OnToggleNavMode(object sender, RoutedEventArgs e) =>
+    private void OnToggleNavMode(object sender, RoutedEventArgs e)
+    {
+        if (_nav.Mode == NavigationController.NavigationMode.Fly)
+            _nav.SetGroundY(ComputeGroundY());
         _nav.SetMode(_nav.Mode == NavigationController.NavigationMode.Walk
             ? NavigationController.NavigationMode.Fly
             : NavigationController.NavigationMode.Walk);
+    }
 
     private void OnToggleFollow(object sender, RoutedEventArgs e) =>
         _nav.SetFollowRevit(!_nav.FollowRevit);
+
+    /// <summary>Lowest scene vertex near the camera — the floor used by walk mode.</summary>
+    private float ComputeGroundY()
+    {
+        var world = _lastWorld;
+        if (world == null) return 0f;
+        var p = _nav.Pose;
+        var best = float.MaxValue;
+        var any = false;
+        foreach (var model in world.Models)
+        {
+            var positions = model.Positions;
+            for (var i = 0; i + 2 < positions.Length; i += 3)
+            {
+                var x = positions[i];
+                var y = positions[i + 1];
+                var z = positions[i + 2];
+                if (Math.Abs(x - p.X) > 30f || Math.Abs(z - p.Z) > 30f) continue;
+                if (y > p.Y + 0.3f) continue;
+                if (y < best) { best = y; any = true; }
+            }
+        }
+        return any ? best : 0f;
+    }
 
     private readonly string _captureDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "PowerPotion");
@@ -123,6 +212,19 @@ public partial class MainWindow : Window
         _nav = new NavigationController(_engine);
         _nav.FollowChanged += UpdateNavigationUi;
         _nav.ModeChanged += UpdateNavigationUi;
+
+        // Clicking the render area must focus the native window so the engine receives WASD;
+        // clicking the toolbar must not steal focus from the buttons.
+        Activated += (_, _) =>
+        {
+            if (_engine.NativeWindowHandle != IntPtr.Zero && Enscape.Win32.IsOverWindow(_engine.NativeWindowHandle))
+                _engine.FocusRenderWindow();
+        };
+        Deactivated += (_, _) => _engine.NotifyFocus(false);
+
+        _engine.WorldUpdateFinished += result =>
+            Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() => OnWorldUpdateFinished(result)));
+        ShowLoading(connection != null ? "Connecting to Revit…" : "Starting renderer…");
 
         _engine.Log += m =>
         {
@@ -188,6 +290,13 @@ public partial class MainWindow : Window
                 ApplySettings();
                 _nav.ApplyModeToEngine();
                 UpdateNavigationUi();
+                if (_pendingWorld == null)
+                {
+                    // Do not reveal the native window yet: the engine paints its own "Enscape"
+                    // splash there until it has a scene, and that native splash used to appear
+                    // behind the branded loader. The window is shown on the first world commit.
+                    ShowLoading("Renderer ready — waiting for scene from Revit…");
+                }
                 _ = _connection?.SendEngineReadyAsync(true, "");
                 if (_pendingWorld != null)
                 {
@@ -199,6 +308,10 @@ public partial class MainWindow : Window
             _surface.EngineFailed += ex =>
             {
                 HostLog.Exception("RendererSurface.EngineFailed", ex);
+                ShowLoading("Renderer failed to start — see logs.");
+                var hide = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+                hide.Tick += (_, _) => { hide.Stop(); HideLoading(); };
+                hide.Start();
                 _ = _connection?.SendEngineReadyAsync(false, ex.Message);
             };
             SurfaceHost.Children.Add(_surface);
@@ -216,6 +329,7 @@ public partial class MainWindow : Window
             // Revit exports and sends the scene immediately after connecting; the native engine
             // takes several seconds to come up. Keep the latest snapshot until it is ready.
             _pendingWorld = world;
+            ShowLoading("Scene received — starting renderer…");
             SetStatus($"Scene received ({world.Models.Count} models) — waiting for renderer…");
             HostLog.Write($"OnWorld queued: {world.Models.Count} models, {world.Instances.Count} instances, " +
                           $"{world.Materials.Count} materials, {world.Lights.Count} lights");
@@ -225,9 +339,11 @@ public partial class MainWindow : Window
         SetStatus($"Received world '{world.ViewName}' — {world.Models.Count} models, {world.Materials.Count} materials, {world.Lights.Count} lights. Updating…");
         HostLog.Write($"OnWorld apply: {world.Models.Count} models, {world.Instances.Count} instances, " +
                       $"{world.Materials.Count} materials, {world.Lights.Count} lights");
+        if (!_anyWorldApplied) ShowLoading("Importing scene from Revit…");
+        else ShowRefresh();
         try
         {
-            _engine.ApplyWorld(world);
+            _engine.ApplyWorld(world, applyCamera: _nav.FollowRevit);
         }
         catch (Exception ex)
         {
@@ -239,6 +355,7 @@ public partial class MainWindow : Window
         _materials.AddRange(world.Materials);
         if (_sidebarIsMaterials) BuildMaterialsPanel();
         DocLabel.Text = world.DocumentName;
+        _lastWorld = world;
         SetStatus("World updated.");
     }
 
@@ -615,6 +732,7 @@ public partial class MainWindow : Window
     {
         try
         {
+            _splash?.Close();
             _nav.Dispose();
             _connection?.Dispose();
             _engine.Dispose();

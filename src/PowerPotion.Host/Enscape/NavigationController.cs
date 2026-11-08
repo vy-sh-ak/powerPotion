@@ -32,6 +32,8 @@ public sealed class NavigationController : IDisposable
     private float _yaw, _pitch;
     private float _fov = 60f;
     private float _walkEyeY = WalkEyeHeightFallback;
+    private float _groundY;
+    private bool _hasGround;
     private bool _hasCamera;
     private bool _followRevit = true;
     private bool _engineReady;
@@ -69,6 +71,13 @@ public sealed class NavigationController : IDisposable
     }
 
     public void SetRenderWindow(IntPtr hwnd) => _renderHwnd = hwnd;
+
+    /// <summary>Floor height (engine Y) under the camera, from the last world snapshot.</summary>
+    public void SetGroundY(float y)
+    {
+        _groundY = y;
+        _hasGround = true;
+    }
 
     private void Start()
     {
@@ -122,10 +131,17 @@ public sealed class NavigationController : IDisposable
         if (_mode == mode) return;
         _mode = mode;
         if (mode == NavigationMode.Walk)
-            _walkEyeY = Math.Max(_y, 0.2f);
+        {
+            // Place the eye 1.7 m above the scene floor under the camera (computed from the world
+            // snapshot) — the old code guessed 0.2 m and the first move snapped the height.
+            SyncFromEngine();
+            _walkEyeY = _hasGround ? _groundY + 1.7f : _y;
+            _y = _walkEyeY;
+            ApplyCurrent();
+        }
         var fly = mode == NavigationMode.Fly ? 1 : 0;
         _engine.ExecuteConsoleCommand($"sp_fly {fly}", false);
-        HostLog.Write($"nav mode: {(mode == NavigationMode.Fly ? "fly" : "walk")} (sp_fly {fly})");
+        HostLog.Write($"nav mode: {(mode == NavigationMode.Fly ? "fly" : "walk")} (sp_fly {fly}, eyeY={_walkEyeY:0.##})");
         ModeChanged?.Invoke();
     }
 
@@ -172,6 +188,7 @@ public sealed class NavigationController : IDisposable
         {
             SyncFromEngine();
             _followRevit = false;
+            _engine.FocusRenderWindow();
             FollowChanged?.Invoke();
         }
         if (!_hasCamera && _lastRevitCamera != null) FromCamera(_lastRevitCamera);
@@ -191,7 +208,7 @@ public sealed class NavigationController : IDisposable
         _yaw = MathF.Atan2(forward[0], -forward[2]) * (180f / MathF.PI);
         _pitch = MathF.Asin(Math.Clamp(forward[1], -1f, 1f)) * (180f / MathF.PI);
         if (c.FovDegrees > 0) _fov = c.FovDegrees;
-        _walkEyeY = Math.Max(_y, WalkEyeHeightFallback);
+        _walkEyeY = _y;
         _hasCamera = true;
     }
 
@@ -320,16 +337,14 @@ public sealed class NavigationController : IDisposable
     private void Tick()
     {
         if (!_engineReady) return;
-        if (!Win32.IsOurProcessForeground())
+
+        var foreground = Win32.IsOurProcessForeground();
+        if (!foreground && !_loggedNoForeground)
         {
-            if (!_loggedNoForeground)
-            {
-                _loggedNoForeground = true;
-                HostLog.Write("nav tick: foreground is not the host process");
-            }
-            return;
+            _loggedNoForeground = true;
+            HostLog.Write("nav tick: foreground is not the host process");
         }
-        if (!_loggedTick)
+        if (foreground && !_loggedTick)
         {
             _loggedTick = true;
             HostLog.Write("nav tick: active");
@@ -338,38 +353,39 @@ public sealed class NavigationController : IDisposable
         PollEngineCamera();
 
         var dt = 1f / 60f;
-        var fast = Win32.IsKeyDown(0x10);   // Shift
-        var slow = Win32.IsKeyDown(0x11);   // Ctrl
+        var fast = foreground && Win32.IsKeyDown(0x10);   // Shift
+        var slow = foreground && Win32.IsKeyDown(0x11);   // Ctrl
 
         float forward = 0, right = 0, up = 0;
-        if (Win32.IsKeyDown(0x57)) forward += 1f; // W
-        if (Win32.IsKeyDown(0x53)) forward -= 1f; // S
-        if (Win32.IsKeyDown(0x44)) right += 1f;   // D
-        if (Win32.IsKeyDown(0x41)) right -= 1f;   // A
-        if (_mode == NavigationMode.Fly)
+        if (foreground)
         {
-            if (Win32.IsKeyDown(0x45)) up += 1f;  // E
-            if (Win32.IsKeyDown(0x51)) up -= 1f;  // Q
+            if (Win32.IsKeyDown(0x57)) forward += 1f; // W
+            if (Win32.IsKeyDown(0x53)) forward -= 1f; // S
+            if (Win32.IsKeyDown(0x44)) right += 1f;   // D
+            if (Win32.IsKeyDown(0x41)) right -= 1f;   // A
+            if (_mode == NavigationMode.Fly)
+            {
+                if (Win32.IsKeyDown(0x45)) up += 1f;  // E
+                if (Win32.IsKeyDown(0x51)) up -= 1f;  // Q
+            }
         }
 
-        // Mouse look / wheel are captured by the low-level hook (and swallowed there); WASD is polled.
         var lookX = Interlocked.Exchange(ref _lookAccumX, 0);
         var lookY = Interlocked.Exchange(ref _lookAccumY, 0);
         var rightButton = _hookLooking;
         var wheel = (float)Interlocked.Exchange(ref _wheelDelta, 0L) / 120f;
 
-        var anyInput = forward != 0 || right != 0 || up != 0 || wheel != 0 || lookX != 0 || lookY != 0 || rightButton;
+        var anyInput = forward != 0 || right != 0 || up != 0 || wheel != 0
+                       || lookX != 0 || lookY != 0 || rightButton;
         if (!anyInput) return;
 
-        LogInput(forward, right, up, wheel, rightButton, false);
+        LogInput(forward != 0 || right != 0 || up != 0, rightButton, false, wheel);
 
-        // First real interaction inside the renderer detaches from the Revit camera (Enscape behaviour).
         if (_followRevit) Detach();
+        _lastInput = DateTime.UtcNow;
 
-        if (forward == 0 && right == 0 && up == 0 && wheel == 0 && lookX == 0 && lookY == 0) return;
-
-        // Adopt the engine's camera first (it may have moved for reasons we do not control), then
-        // apply our look/movement so we never snap back to a stale pose.
+        // Base the new pose on the engine's current camera, then apply our deltas. The engine window
+        // is disabled, so this is the only camera writer and there is no competing movement.
         SyncFromEngine();
 
         if (lookX != 0 || lookY != 0)
@@ -385,7 +401,7 @@ public sealed class NavigationController : IDisposable
         }
         if (wheel != 0)
         {
-            MoveBy(0.8f * wheel, 0f, 0f); // one wheel notch ≈ 0.8 m
+            MoveBy(0.8f * wheel, 0f, 0f);
         }
         ApplyCurrent();
     }
@@ -393,9 +409,9 @@ public sealed class NavigationController : IDisposable
     private bool _loggedKeys, _loggedLook, _loggedWheel, _loggedPan;
     private DateTime _lastPoseLog = DateTime.MinValue;
     private DateTime _lastCameraPoll = DateTime.MinValue;
+    private DateTime _lastInput = DateTime.MinValue;
 
-    // low-level mouse hook state (mouse look / wheel are captured here and swallowed, so the
-    // engine cannot apply a second, conflicting navigation step)
+    // low-level mouse hook state: look and wheel are swallowed while the cursor is over the renderer
     private bool _hookLooking;
     private int _hookLastX, _hookLastY;
     private int _lookAccumX, _lookAccumY;
@@ -403,12 +419,17 @@ public sealed class NavigationController : IDisposable
 
     private const float MouseSensitivity = 0.12f; // degrees per pixel
 
+    // low-level mouse hook state (mouse look / wheel are captured here and swallowed, so the
+    // engine cannot apply a second, conflicting navigation step)
+
+
     private void PollEngineCamera()
     {
         if (_followRevit) return;
+        var camera = _engine.ReadCamera();
+        if (camera != null) FromCamera(camera);
         if ((DateTime.UtcNow - _lastCameraPoll).TotalSeconds < 0.5) return;
         _lastCameraPoll = DateTime.UtcNow;
-        var camera = _engine.ReadCamera();
         if (camera == null) return;
         HostLog.Write(string.Format(System.Globalization.CultureInfo.InvariantCulture,
             "nav camera: x={0:0.###} y={1:0.###} z={2:0.###} quat={3:0.####},{4:0.####},{5:0.####},{6:0.####}",
@@ -416,12 +437,11 @@ public sealed class NavigationController : IDisposable
             camera.QuatX, camera.QuatY, camera.QuatZ, camera.QuatW));
     }
 
-    private void LogInput(float forward, float right, float up,
-        float wheel, bool rightButton, bool middleButton)
+    private void LogInput(bool keys, bool rightButton, bool middleButton, float wheel)
     {
         try
         {
-            if ((forward != 0 || right != 0 || up != 0) && !_loggedKeys)
+            if (keys && !_loggedKeys)
             {
                 _loggedKeys = true;
                 HostLog.Write("nav input: keyboard (W/A/S/D Q/E)");
@@ -474,33 +494,32 @@ public sealed class NavigationController : IDisposable
 
     private IntPtr LowLevelMouse(int nCode, IntPtr wParam, IntPtr lParam)
     {
-        if (nCode >= 0 && Win32.IsOurProcessForeground())
+        if (nCode >= 0)
         {
             var message = wParam.ToInt32();
             var data = Marshal.PtrToStructure<Win32.MSLLHOOKSTRUCT>(lParam);
             var overRenderer = Win32.IsOverWindow(_renderHwnd);
+            var foreground = Win32.IsOurProcessForeground();
 
-            if (message == Win32.WM_MOUSEWHEEL)
+            if ((message == Win32.WM_RBUTTONDOWN || message == Win32.WM_LBUTTONDOWN) && overRenderer)
             {
-                if (!overRenderer) return Win32.CallNextHookEx(_mouseHook, nCode, wParam, lParam);
-                var delta = (short)((data.mouseData >> 16) & 0xFFFF);
-                Interlocked.Add(ref _wheelDelta, delta);
-                return (IntPtr)1; // swallowed: the host applies the dolly itself
-            }
-
-            if (message == Win32.WM_RBUTTONDOWN)
-            {
-                if (!overRenderer) return Win32.CallNextHookEx(_mouseHook, nCode, wParam, lParam);
+                if (!foreground)
+                {
+                    var root = Win32.GetAncestor(_renderHwnd, Win32.GA_ROOT);
+                    if (root != IntPtr.Zero) Win32.SetForegroundWindow(root);
+                }
                 _hookLooking = true;
                 _hookLastX = data.pt.X;
                 _hookLastY = data.pt.Y;
-                return (IntPtr)1;
+                // Do NOT swallow the button-down: the click must reach the window so Windows
+                // activates the host (swallowing it was why several clicks were needed).
+                return Win32.CallNextHookEx(_mouseHook, nCode, wParam, lParam);
             }
 
-            if (message == Win32.WM_RBUTTONUP)
+            if (message == Win32.WM_RBUTTONUP || message == Win32.WM_LBUTTONUP)
             {
                 _hookLooking = false;
-                return (IntPtr)1;
+                return Win32.CallNextHookEx(_mouseHook, nCode, wParam, lParam);
             }
 
             if (message == Win32.WM_MOUSEMOVE && _hookLooking)
@@ -523,7 +542,14 @@ public sealed class NavigationController : IDisposable
                         _recentering = true;
                     }
                 }
-                return (IntPtr)1; // swallow so the engine does not apply a duplicate look
+                return (IntPtr)1;
+            }
+
+            if (foreground && message == Win32.WM_MOUSEWHEEL && overRenderer)
+            {
+                var delta = (short)((data.mouseData >> 16) & 0xFFFF);
+                Interlocked.Add(ref _wheelDelta, delta);
+                return (IntPtr)1;
             }
         }
         return Win32.CallNextHookEx(_mouseHook, nCode, wParam, lParam);

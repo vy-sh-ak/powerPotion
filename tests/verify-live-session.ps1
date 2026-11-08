@@ -47,6 +47,7 @@ Check 'camera streaming (>= 30 Hz updates)'      ($cameraUpdates -ge $MinimumCam
 Check 'initial export sent by Revit'             ($exports -ge 1 -and $worldSent -ge 1) "exports: $exports, world sent: $worldSent"
 if ($RequireLiveEdit) {
     Check 'live edit triggered a second export'  ($exports -ge 2) "exports: $exports"
+    Check 'DocumentChanged queued an export'     ($revitText -match 'document changed -> export queued')
 }
 if ($RequireNavigation) {
     Check 'free navigation detached from Revit' ($hostText -match 'nav ui: follow=False')

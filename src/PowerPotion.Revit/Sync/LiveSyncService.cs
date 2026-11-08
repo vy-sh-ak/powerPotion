@@ -42,6 +42,8 @@ public sealed class LiveSyncService : IDisposable
     private bool _initialWorldSent;
     private DateTime _lastCameraPush = DateTime.MinValue;
     private readonly SemaphoreSlim _sendGate = new(1, 1);
+    private ExternalEvent? _exportEvent;
+    private bool _retryExportScheduled;
 
     public bool IsRunning => _running;
     public event Action<string>? Log;
@@ -86,22 +88,75 @@ public sealed class LiveSyncService : IDisposable
         }
 
         LaunchHost(port.Value);
+        _exportEvent = ExternalEvent.Create(new ExportEventHandler(this));
         HookEvents();
         _running = true;
         LogLine($"Live sync started on port {port} (view: {_view.Name}).");
 
         // The initial export MUST run inside a Revit API context (CustomExporter is not
-        // thread-safe and cannot be called from a worker thread); OnIdling performs it as soon
-        // as the host has connected.
+        // thread-safe and cannot be called from a worker thread). The ExternalEvent mirrors
+        // Enscape's RevitCadDispatcher and runs as soon as the host is connected.
         _ = Task.Run(async () =>
         {
             try
             {
                 await WaitForClientAsync();
                 _hostConnected = true;
+                RequestExport();
             }
             catch (Exception ex) { LogLine("start: " + ex.Message); }
         });
+    }
+
+    private sealed class ExportEventHandler : IExternalEventHandler
+    {
+        private readonly LiveSyncService _owner;
+        public ExportEventHandler(LiveSyncService owner) => _owner = owner;
+        public string GetName() => "PowerPotion.SceneExport";
+        public void Execute(UIApplication app) => _owner.ExecutePendingExport();
+    }
+
+    /// <summary>Queues an export on Revit's API thread (ExternalEvent, like Enscape's CAD dispatcher).</summary>
+    private void RequestExport()
+    {
+        try
+        {
+            if (!_running || _exportEvent == null) return;
+            if (_exportEvent.Raise() != ExternalEventRequest.Accepted)
+                ScheduleExportRetry();
+        }
+        catch (Exception ex) { LogLine("export request: " + ex.Message); }
+    }
+
+    private void ScheduleExportRetry()
+    {
+        if (_retryExportScheduled) return;
+        _retryExportScheduled = true;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(300);
+                _retryExportScheduled = false;
+                if (_running) RequestExport();
+            }
+            catch { _retryExportScheduled = false; }
+        });
+    }
+
+    private void ExecutePendingExport()
+    {
+        if (!_running) return;
+        if (DateTime.UtcNow - _lastExport < TimeSpan.FromMilliseconds(250))
+        {
+            _reexportQueued = true;
+            ScheduleExportRetry();
+            return;
+        }
+        _reexportQueued = false;
+        _initialWorldSent = true;
+        ExportAndSendWorld(fullExport: true);
+        if (!_liveUpdatesPaused) PushCamera();
     }
 
     public void Stop()
@@ -110,6 +165,8 @@ public sealed class LiveSyncService : IDisposable
         _running = false;
         _hostConnected = false;
         _initialWorldSent = false;
+        try { _exportEvent?.Dispose(); } catch { }
+        _exportEvent = null;
         UnhookEvents();
 
         try { _ = SendAsync(MessageType.LiveUpdateState, w => w.Write(true)); } catch { }
@@ -307,11 +364,20 @@ public sealed class LiveSyncService : IDisposable
     private void OnDocumentChanged(object? sender, Autodesk.Revit.DB.Events.DocumentChangedEventArgs e)
     {
         if (!_running || _liveUpdatesPaused) return;
-        if (e.GetDocument() != _document) return;
+        // Document objects can be different wrappers around the same model; compare identity by title+path.
+        var changed = e.GetDocument();
+        if (changed == null) return;
+        if (_document != null && !ReferenceEquals(changed, _document))
+        {
+            var sameFile = string.Equals(changed.PathName, _document.PathName, StringComparison.OrdinalIgnoreCase)
+                           && string.Equals(changed.Title, _document.Title, StringComparison.Ordinal);
+            if (!sameFile) return;
+        }
 
-        // DocumentChanged is raised inside the transaction/commit path: do not run CustomExporter
-        // here. Enscape defers scene work to a safe API context; we queue it and export from Idling.
+        // Do not export inside the transaction/commit path: queue an API-context export.
         _reexportQueued = true;
+        LogLine("document changed -> export queued");
+        RequestExport();
     }
 
     private void OnIdling(object? sender, Autodesk.Revit.UI.Events.IdlingEventArgs e)
@@ -322,19 +388,16 @@ public sealed class LiveSyncService : IDisposable
         // renderer window has focus, which freezes camera streaming and live model updates.
         try { e.SetRaiseWithoutDelay(); } catch { }
 
-        // First scene: sent from the Revit API context once the host has connected.
+        // Fallback: if the ExternalEvent could not run (modal dialog, etc.), export here.
         if (!_initialWorldSent && _hostConnected)
         {
-            _initialWorldSent = true;
-            ExportAndSendWorld(fullExport: true);
-            PushCamera();
+            RequestExport();
             return;
         }
 
-        if (_reexportQueued && !_liveUpdatesPaused && DateTime.UtcNow - _lastExport >= TimeSpan.FromMilliseconds(400))
+        if (_reexportQueued && !_liveUpdatesPaused && DateTime.UtcNow - _lastExport >= TimeSpan.FromMilliseconds(250))
         {
-            _reexportQueued = false;
-            ExportAndSendWorld(fullExport: true);
+            RequestExport();
             return;
         }
 

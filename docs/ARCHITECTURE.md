@@ -128,15 +128,16 @@ the decompiled Revit plugin, and controlled renders on the installed engine:
   * **Fly** — `W/A/S/D` move, `Q/E` down/up, hold **right mouse** to look, wheel dollies, `Shift` fast,
     `Ctrl` slow.
   * **Walk** — `W/A/S/D` + look, wheel walks forward/back; eye height is clamped (1.7 m), `Q/E` disabled.
-  * Keyboard is polled (`GetAsyncKeyState`); right-button look and the wheel are captured by a
-    low-level mouse hook and swallowed **only while the cursor is over the render surface**, so the
+  * Keyboard is polled (`GetAsyncKeyState`); left- or right-button look and the wheel are captured by
+    a low-level mouse hook and swallowed **only while the cursor is over the render surface**, so the
     engine cannot apply a competing navigation step and the settings sidebar still scrolls normally.
+    Button-down is passed through (never swallowed) so the first click also activates the window.
   * The first interaction inside the renderer detaches from the Revit camera (Enscape's live-camera
     behaviour); the toolbar's **Follow Revit** button re-attaches at the latest Revit view. The
     **Fly/Walk** button switches modes (`sp_fly` is forwarded to the engine as well).
 * `pp_nav` console commands (`mode`, `follow`, `look`, `move`, `teleport`, `fov`, `focus`) exist for
   automated testing of the camera path (used by `tests/PowerPotion.SmokeTest`, including a
-  `--real-input` mode that injects real `W`/right-drag/wheel events with `SendInput`).
+  `--real-input` mode that injects real `W`/left-drag/wheel events with `SendInput`).
 
 ## Branding & theme
 
@@ -152,6 +153,35 @@ The potion mark and the dark-purple theme are generated from one vector definiti
 
 The host WPF window uses the same palette (deep violet `#140B22` / `#1E1230`, accent
 `#B388FF`, gold `#F5B544`) with a dark immersive title bar and the logo in the toolbar.
+
+## Startup, live sync and navigation hardening
+
+* **No Enscape splash**: the engine window is created far off-screen (`-32000, -32000`) and a
+  watchdog hides every native window of class `Enscape` (top-level *and* child windows — some builds
+  parent the loading screen to the host). The watchdog stays active with the session, but skips the
+  single embedded render window once it is revealed. That reveal happens only when the first world
+  commits (never on "renderer ready"), because until it has a scene the engine paints its own
+  "Enscape 4.7.0" splash inside that window. The branded splash closes at the same moment.
+* **Branded splash + loaders**: a separate top-level `SplashWindow` (logo, "Power Potion", animated
+  bar, phase text) is used because the render surface is an HwndHost (airspace). It shows
+  "Connecting to Revit…" → "Scene received — starting renderer…" → "Importing scene from Revit…".
+  Scene refreshes show a compact "Refreshing from Revit…" spinner in the status bar instead of
+  covering the view.
+* **Live sync** (validated against Enscape's shipped plugin with REA Evidence
+  `ev_a52ad799045d27f12640a9449909340f58a8f45fadd8421c54f61d275096b695`):
+  Enscape's `DocumentObserver.OnDocumentChanged` queues a transaction and dispatches it through
+  `RevitCadDispatcher`, which implements `IExternalEventHandler` and owns an `ExternalEvent`.
+  PowerPotion does the same (`LiveSyncService.ExportEventHandler`): `DocumentChanged` only marks the
+  scene dirty and raises an `ExternalEvent`; the export runs in a valid Revit API context, debounced
+  and retried if Revit denies the event. The Idling path remains as a fallback.
+* **Startup race**: the TCP reader is started only after `MainWindow` has subscribed to the
+  connection events, so the first scene Revit sends immediately after connecting cannot be dropped.
+* **Navigation**: the native window is disabled (`EnableWindow(false)`) and the host owns input,
+  eliminating the competing engine camera movement that caused the shaking sky. Mouse look uses a
+  low-level hook with cursor recentering (left or right button), the wheel is captured over the
+  render area, and the button-down is passed through so the drag also activates the window. Walk mode
+  places the eye 1.7 m above the floor
+  computed from the scene under the camera, so switching to walk no longer drops below the model.
 
 ## Legal / ethical scope
 

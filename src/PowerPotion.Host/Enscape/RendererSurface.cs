@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -49,10 +51,71 @@ public sealed class RendererSurface : HwndHost
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool EnableWindow(IntPtr hWnd, bool enable);
+
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern ushort RegisterClass(ref WNDCLASS wc);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr DefWindowProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateSolidBrush(uint color);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr GetModuleHandle(string? name);
+
+    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct WNDCLASS
+    {
+        public uint style;
+        public IntPtr lpfnWndProc;
+        public int cbClsExtra;
+        public int cbWndExtra;
+        public IntPtr hInstance;
+        public IntPtr hIcon;
+        public IntPtr hCursor;
+        public IntPtr hbrBackground;
+        public string? lpszMenuName;
+        public string lpszClassName;
+    }
+
+    private const string HostClassName = "PowerPotion.SurfaceHost";
+    private static bool _classRegistered;
+    private static IntPtr _darkBrush;
+    private static WndProcDelegate? _wndProc;
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern bool EnumChildWindows(IntPtr parent, EnumWindowsProc callback, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr hWnd, StringBuilder text, int count);
+
+    private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+    private const int SW_HIDE = 0;
+    private const int SW_SHOW = 5;
+
     private const int SS_BLACKRECT = 0x00000004;
 
     private IntPtr _hostHwnd;
     private bool _startRequested;
+    private volatile bool _suppressEngineWindow;
+    private volatile bool _engineWindowShown;
+    private System.Threading.Timer? _hideTimer;
+    private readonly HashSet<IntPtr> _loggedHidden = new();
     private readonly EngineBridge _engine;
     private readonly Func<string> _documentName;
 
@@ -83,9 +146,10 @@ public sealed class RendererSurface : HwndHost
 
     protected override HandleRef BuildWindowCore(HandleRef hwndParent)
     {
-        // A plain child window fills the HwndHost area while the engine boots. SS_BLACKRECT keeps it
-        // dark (a default static control would paint the system window colour — the white flash).
-        _hostHwnd = CreateWindowEx(0, "Static", "", WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | SS_BLACKRECT,
+        EnsureWindowClass();
+        // A dark native placeholder fills the HwndHost area while the engine boots (a default
+        // static control paints the system gray — that gray was visible behind the splash).
+        _hostHwnd = CreateWindowEx(0, HostClassName, "", WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
             0, 0, 1, 1, hwndParent.Handle, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
         HostLog.Write($"BuildWindowCore parent=0x{hwndParent.Handle:X} host=0x{_hostHwnd:X}");
 
@@ -100,6 +164,22 @@ public sealed class RendererSurface : HwndHost
         return new HandleRef(this, _hostHwnd);
     }
 
+    private static void EnsureWindowClass()
+    {
+        if (_classRegistered) return;
+        _darkBrush = CreateSolidBrush(0x0018080F); // COLORREF 0x00BBGGRR ≈ #0F0818
+        _wndProc = DefWindowProc;
+        var wc = new WNDCLASS
+        {
+            lpfnWndProc = Marshal.GetFunctionPointerForDelegate(_wndProc),
+            hInstance = GetModuleHandle(null),
+            hbrBackground = _darkBrush,
+            lpszClassName = HostClassName,
+        };
+        RegisterClass(ref wc);
+        _classRegistered = true;
+    }
+
     private void StartEngine()
     {
         if (_hostHwnd == IntPtr.Zero) return;
@@ -109,10 +189,20 @@ public sealed class RendererSurface : HwndHost
             // (Enscape: RendererWindow.RendererScreenGeometry = placeholder bounds translated to screen).
             var window = Window.GetWindow(this);
             var topLevel = window != null ? new WindowInteropHelper(window).Handle : IntPtr.Zero;
-            var (x, y, w, h) = GetScreenRect();
+            var (_, _, w, h) = GetScreenRect();
 
-            HostLog.Write($"StartEngine topLevel=0x{topLevel:X} rect={x},{y} {w}x{h} doc='{_documentName()}'");
-            var result = _engine.StartRendererNative(topLevel, x, y, w, h);
+            // Create the engine window far off-screen: its own "Enscape" splash/title window would
+            // otherwise flash over the UI for a second before we reparent it into the surface.
+            HostLog.Write($"StartEngine topLevel=0x{topLevel:X} rect=offscreen {w}x{h} doc='{_documentName()}'");
+
+            // The engine ignores the off-screen position on some builds and shows its own "Enscape"
+            // splash window where the surface is. Hide any native engine window until initialization
+            // completes and we reparent it (a background timer keeps hiding it while the UI thread is
+            // blocked inside the native start call).
+            _suppressEngineWindow = true;
+            _hideTimer = new System.Threading.Timer(_ => HideEngineWindows(), null, 0, 100);
+
+            var result = _engine.StartRendererNative(topLevel, -32000, -32000, w, h);
             if (global::Enscape.RendererApi.EnscapeAPI.IsError(result))
                 throw new InvalidOperationException($"Engine failed to start: {result}");
 
@@ -124,6 +214,58 @@ public sealed class RendererSurface : HwndHost
             HostLog.Exception("StartEngine", ex);
             Post(() => { Log?.Invoke("Engine start failed: " + ex.Message); EngineFailed?.Invoke(ex); });
         }
+    }
+
+    private void HideEngineWindows()
+    {
+        if (!_suppressEngineWindow) return;
+        try
+        {
+            var pid = (uint)Environment.ProcessId;
+            var embedded = _engine.NativeWindowHandle;
+            var keepEmbedded = _engineWindowShown && embedded != IntPtr.Zero;
+
+            bool IsSplashWindow(IntPtr hwnd)
+            {
+                var cls = new StringBuilder(64);
+                GetClassName(hwnd, cls, 64);
+                return cls.ToString().Equals("Enscape", StringComparison.OrdinalIgnoreCase)
+                       && !(keepEmbedded && hwnd == embedded);
+            }
+
+            var hidden = new HashSet<IntPtr>();
+            EnumWindows((top, _) =>
+            {
+                GetWindowThreadProcessId(top, out var processId);
+                if (processId != pid) return true;
+
+                if (IsSplashWindow(top))
+                {
+                    ShowWindow(top, SW_HIDE);
+                    hidden.Add(top);
+                }
+
+                // The engine sometimes parents its loading/splash window to the host window, so
+                // EnumWindows alone misses it — walk the child tree as well.
+                EnumChildWindows(top, (child, _) =>
+                {
+                    if (IsSplashWindow(child))
+                    {
+                        ShowWindow(child, SW_HIDE);
+                        hidden.Add(child);
+                    }
+                    return true;
+                }, IntPtr.Zero);
+                return true;
+            }, IntPtr.Zero);
+
+            foreach (var hwnd in hidden)
+            {
+                if (_loggedHidden.Add(hwnd))
+                    HostLog.Write($"watchdog: hid engine window 0x{hwnd:X} (embedded=0x{embedded:X} shown={_engineWindowShown})");
+            }
+        }
+        catch (Exception ex) { HostLog.Exception("HideEngineWindows", ex); }
     }
 
     private async Task InitializeAsync()
@@ -155,6 +297,10 @@ public sealed class RendererSurface : HwndHost
         if (engineWindow == IntPtr.Zero || _hostHwnd == IntPtr.Zero)
             throw new InvalidOperationException("Renderer window handle is not available.");
 
+        // Keep the watchdog running: the engine creates its own "Enscape" splash window during
+        // initialization and occasionally again when the first scene is rendered. It must stay
+        // hidden until (and after) we reveal the render window ourselves.
+
         var style = GetWindowLongPtr(engineWindow, GWL_STYLE).ToInt64();
         style &= ~(long)WS_POPUP;
         style |= WS_CHILD;
@@ -162,7 +308,34 @@ public sealed class RendererSurface : HwndHost
         SetParent(engineWindow, _hostHwnd);
 
         HostLog.Write($"Embedded engine window 0x{engineWindow:X} into host 0x{_hostHwnd:X} (style 0x{style:X8})");
+
+        // The host owns navigation (keyboard/mouse/wheel) and drives SetCamera; disabling the native
+        // window keeps the engine from applying a second, competing camera movement (which showed up
+        // as a shaking sky and occasional double-steps).
+        // Keep it hidden until the first scene is committed, so the engine's own loading screen can
+        // never appear behind the branded splash.
+        ShowWindow(engineWindow, SW_HIDE);
+        EnableWindow(engineWindow, false);
+        _engineWindowShown = false;
+
         ResizeEngineWindow();
+    }
+
+    /// <summary>Reveals the renderer once the first scene (or a standalone session) has been committed.</summary>
+    public void ShowEngineWindow()
+    {
+        if (_engineWindowShown) return;
+        var engineWindow = _engine.NativeWindowHandle;
+        if (engineWindow == IntPtr.Zero) return;
+
+        // Mark first so the watchdog starts ignoring the render window itself, then hide any
+        // remaining engine splash windows before revealing it.
+        _engineWindowShown = true;
+        HideEngineWindows();
+        ShowWindow(engineWindow, SW_SHOW);
+        ResizeEngineWindow();
+        _hideTimer?.Change(250, 250);
+        HostLog.Write("Engine window shown (first scene ready).");
     }
 
     private void ResizeEngineWindow()
@@ -213,6 +386,9 @@ public sealed class RendererSurface : HwndHost
     protected override void DestroyWindowCore(HandleRef hwnd)
     {
         HostLog.Write($"DestroyWindowCore host=0x{_hostHwnd:X}");
+        _suppressEngineWindow = false;
+        _hideTimer?.Dispose();
+        _hideTimer = null;
         try { _engine.StopAsync().GetAwaiter().GetResult(); } catch { }
         if (_hostHwnd != IntPtr.Zero)
         {

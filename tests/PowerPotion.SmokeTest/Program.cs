@@ -25,6 +25,8 @@ public static class Program
     public static async Task<int> Main(string[] args)
     {
         var realInput = args.Any(a => a == "--real-input");
+        var backgroundInput = args.Any(a => a == "--background-input");
+        var lateWorld = args.Any(a => a == "--late-world");
         var hostArg = args.FirstOrDefault(a => !a.StartsWith("--", StringComparison.Ordinal));
         var hostExe = hostArg != null
             ? hostArg
@@ -77,6 +79,26 @@ public static class Program
         });
 
         // World immediately: the engine is still booting, so this also checks host-side buffering.
+        if (lateWorld)
+        {
+            // Real Revit order: the plugin exports only after the host reports EngineReady, so the
+            // native window spends several seconds visible-but-empty. Make sure it stays hidden and
+            // does not show its own Enscape splash during that window.
+            Console.WriteLine("deferring world #1 until the host signals EngineReady");
+            using var readyCts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
+            while (true)
+            {
+                var frame = await MessageCodec.ReadFrameAsync(_stream, readyCts.Token);
+                if (frame is null) throw new InvalidOperationException("host disconnected before EngineReady");
+                if (frame.Value.Type == MessageType.EngineReady)
+                {
+                    Console.WriteLine("host signalled EngineReady; waiting 3 s before exporting");
+                    break;
+                }
+            }
+            await Task.Delay(3000);
+        }
+
         var world = BuildWorld(extra: false);
         Console.WriteLine($"world #1: {world.Models.Count} models, {world.Materials.Count} materials (sent before engine ready)");
         await Send(MessageType.WorldSnapshot, w => MessageCodec.WriteWorld(w, world));
@@ -111,10 +133,11 @@ public static class Program
         var canvas = await CaptureAndWait(shotCanvas, TimeSpan.FromSeconds(60));
         Console.WriteLine($"capture canvas: {Describe(shotCanvas, canvas)}");
 
-        await Send(MessageType.ConsoleCommand, w => { w.Write("pp_nav teleport 0 1.7 12"); w.Write(false); });
+        await Send(MessageType.ConsoleCommand, w => { w.Write("pp_nav ground 0"); w.Write(false); });
+        await Send(MessageType.ConsoleCommand, w => { w.Write("pp_nav teleport 0 20 10"); w.Write(false); });
         await Send(MessageType.ConsoleCommand, w => { w.Write("pp_nav mode walk"); w.Write(false); });
         await Send(MessageType.ConsoleCommand, w => { w.Write("pp_nav move 3 0 0"); w.Write(false); });
-        await Task.Delay(600);
+        await Task.Delay(1300);
         var walk = await CaptureAndWait(shotWalk, TimeSpan.FromSeconds(60));
         Console.WriteLine($"capture walk: {Describe(shotWalk, walk)}");
 
@@ -137,6 +160,9 @@ public static class Program
         var worldApplies = log.Split('\n').Count(l => l.Contains("OnWorld apply:"));
         var worldCommits = log.Split('\n').Count(l => l.Contains("World update finished"));
         var embedded = log.Contains("Embedded engine window");
+        var shownIdx = log.IndexOf("Engine window shown", StringComparison.Ordinal);
+        var applyIdx = log.IndexOf("OnWorld apply:", StringComparison.Ordinal);
+        var shownAfterScene = shownIdx > 0 && applyIdx > 0 && shownIdx > applyIdx;
         var dispatcherError = log.Contains("Dispatcher unhandled") || log.Contains("AppDomain unhandled");
 
         double walkY = double.NaN, flyY = double.NaN;
@@ -168,6 +194,7 @@ public static class Program
         Console.WriteLine("verification:");
         Console.WriteLine($"  windows visible          : {windows.Count} (expected 1)");
         Console.WriteLine($"  engine window embedded   : {embedded}");
+        Console.WriteLine($"  renderer shown after scene : {shownAfterScene}");
         Console.WriteLine($"  camera stream log lines  : {cameraLines} (expected >= 3, 30 updates each)");
         Console.WriteLine($"  world applies            : {worldApplies} (expected 2)");
         Console.WriteLine($"  world commits            : {worldCommits} (expected >= 2)");
@@ -180,14 +207,14 @@ public static class Program
         Console.WriteLine($"  fly vertical move        : {flyY - 1.7:0.##} m (expected ~3)");
         Console.WriteLine($"  screenshots              : A={FileSize(shotA)} B={FileSize(shotB)} sky={FileSize(shotSky)} canvas={FileSize(shotCanvas)} walk={FileSize(shotWalk)} fly={FileSize(shotFly)}");
 
-        var ok = windows.Count == 1 && embedded && cameraLines >= 3 && worldApplies == 2
+        var ok = windows.Count == 1 && embedded && shownAfterScene && cameraLines >= 3 && worldApplies == 2
                  && worldCommits >= 2 && !dispatcherError && a && b && sky && canvas && walk && fly
                  && navChangedView && skyVisible && canvasHasSky && canvasHasGround
                  && !double.IsNaN(walkY) && Math.Abs(walkY - 1.7) < 0.2
                  && !double.IsNaN(flyY) && flyY - 1.7 > 2.5;
         if (realInput && ok)
         {
-            try { ok = await RunRealInput(host.Id, hostLog); }
+            try { ok = await RunRealInput(host.Id, hostLog, backgroundInput); }
             catch (Exception ex)
             {
                 Console.WriteLine("real input test error: " + ex.Message);
@@ -207,7 +234,7 @@ public static class Program
         return ok ? 0 : 1;
     }
 
-    private static async Task<bool> RunRealInput(int pid, string hostLogPath)
+    private static async Task<bool> RunRealInput(int pid, string hostLogPath, bool background)
     {
         Console.WriteLine();
         Console.WriteLine("--- real input test (SendInput) ---");
@@ -232,48 +259,51 @@ public static class Program
         var okA = await CaptureAndWait(pA, TimeSpan.FromSeconds(90));
         Console.WriteLine($"  before input : {Describe(pA, okA)}");
 
-        if (!RealInput.ForceForeground(hwnd, pid))
+        if (background)
         {
-            Console.WriteLine("  foreground not acquired — no input injected (safe abort)");
-            return false;
+            RealInput.ActivateShell();
+            await Task.Delay(600);
+            Console.WriteLine($"  host foreground after shell activation: {RealInput.IsForeground(pid)} (expected False)");
         }
-        await Send(MessageType.ConsoleCommand, w => { w.Write("pp_nav focus"); w.Write(false); });
-        await Task.Delay(300);
-        Console.WriteLine("  host window is foreground");
-
-        // W held for 800 ms
-        RealInput.Key(0x57, true);
-        await Task.Delay(800);
-        RealInput.Key(0x57, false);
-        await Task.Delay(500);
-        var okB = await CaptureAndWait(pB, TimeSpan.FromSeconds(60));
-        Console.WriteLine($"  after W      : {Describe(pB, okB)}");
-
-        // right-button mouse look
-        if (!RealInput.IsForeground(pid))
+        else
         {
-            Console.WriteLine("  focus lost before mouse look — abort");
-            return false;
+            if (!RealInput.ForceForeground(hwnd, pid))
+            {
+                Console.WriteLine("  foreground not acquired - no input injected (safe abort)");
+                return false;
+            }
+            await Send(MessageType.ConsoleCommand, w => { w.Write("pp_nav focus"); w.Write(false); });
+            await Task.Delay(300);
+            RealInput.CenterCursor(hwnd, out _, out _);
+            await Task.Delay(150);
+            RealInput.LeftClick();
+            await Task.Delay(400);
+            Console.WriteLine("  host window is foreground");
         }
+
+        // 1) right-button drag: starts even from a background host (the first click activates it)
         RealInput.CenterCursor(hwnd, out _, out _);
         await Task.Delay(150);
-        RealInput.RightButton(true);
+        RealInput.LeftButton(true);
         await Task.Delay(150);
         RealInput.MoveRelative(160, -60);
         await Task.Delay(250);
         RealInput.MoveRelative(160, 0);
         await Task.Delay(250);
-        RealInput.RightButton(false);
+        RealInput.LeftButton(false);
+        await Task.Delay(600);
+        var okB = await CaptureAndWait(pB, TimeSpan.FromSeconds(60));
+        Console.WriteLine($"  after drag   : {Describe(pB, okB)}  foreground={RealInput.IsForeground(pid)}");
+
+        // 2) W held for 800 ms
+        RealInput.Key(0x57, true);
+        await Task.Delay(800);
+        RealInput.Key(0x57, false);
         await Task.Delay(500);
         var okC = await CaptureAndWait(pC, TimeSpan.FromSeconds(60));
-        Console.WriteLine($"  after RMB    : {Describe(pC, okC)}");
+        Console.WriteLine($"  after W      : {Describe(pC, okC)}");
 
-        // wheel
-        if (!RealInput.IsForeground(pid))
-        {
-            Console.WriteLine("  focus lost before wheel — abort");
-            return false;
-        }
+        // 3) wheel
         for (int i = 0; i < 3; i++)
         {
             RealInput.Wheel(120);
@@ -291,7 +321,7 @@ public static class Program
         var detached = log.Contains("nav ui: follow=False");
 
         double distance = 0;
-        var marker = log.LastIndexOf("pp_nav: pp_nav focus", StringComparison.Ordinal);
+        var marker = log.LastIndexOf("pp_nav look 0 20", StringComparison.Ordinal);
         var segment = marker >= 0 ? log.Substring(marker) : log;
         var poses = System.Text.RegularExpressions.Regex.Matches(
             segment, @"nav camera: x=([-\d.]+) y=([-\d.]+) z=([-\d.]+)");
@@ -308,14 +338,14 @@ public static class Program
                                  + Math.Pow(last.Item3 - first.Item3, 2));
         }
 
-        var changedW = okA && okB && Hash(pA) != Hash(pB);
-        var changedLook = okB && okC && Hash(pB) != Hash(pC);
+        var changedLook = okA && okB && Hash(pA) != Hash(pB);
+        var changedW = okB && okC && Hash(pB) != Hash(pC);
         var changedWheel = okC && okD && Hash(pC) != Hash(pD);
 
         Console.WriteLine();
         Console.WriteLine("  input verification:");
+        Console.WriteLine($"    drag changed the view         : {changedLook}");
         Console.WriteLine($"    W changed the view            : {changedW}");
-        Console.WriteLine($"    right-drag changed the view   : {changedLook}");
         Console.WriteLine($"    wheel changed the view        : {changedWheel}");
         Console.WriteLine($"    host saw keyboard input       : {keySeen}");
         Console.WriteLine($"    host saw mouse-look input     : {lookSeen}");
@@ -323,10 +353,9 @@ public static class Program
         Console.WriteLine($"    navigation detached from Revit : {detached}");
         Console.WriteLine($"    camera travelled              : {distance:0.##} m (engine camera log)");
 
-        return changedW && changedLook && changedWheel && keySeen && lookSeen && wheelSeen
+        return changedLook && changedW && changedWheel && keySeen && lookSeen && wheelSeen
                && detached && distance > 0.3;
     }
-
     private static async Task Send(MessageType type, Action<ProtocolWriter> body)
     {
         await SendGate.WaitAsync();

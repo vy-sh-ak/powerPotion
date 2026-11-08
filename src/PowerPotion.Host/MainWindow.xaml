@@ -107,6 +107,31 @@
                     </ScrollViewer>
                 </Grid>
             </Border>
+
+            <!-- startup / scene loader. The HwndHost is an airspace hole, so this WPF overlay is shown
+                 only while the render surface is not yet built (or covered by the separate splash). -->
+            <Grid x:Name="LoadingOverlay" Grid.Column="0" Grid.ColumnSpan="2" Panel.ZIndex="20"
+                  Background="#F0140B22" Visibility="Collapsed">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Image Source="Assets/logo256.png" Width="132" Height="132"
+                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                    <TextBlock Text="Power Potion" FontSize="30" FontWeight="Bold" Foreground="#B388FF"
+                               HorizontalAlignment="Center" Margin="0,16,0,2"/>
+                    <TextBlock Text="L I V E   R E N D E R E R   F O R   R E V I T" FontSize="10"
+                               Foreground="#A996C9" HorizontalAlignment="Center"/>
+                    <Grid Width="220" Height="4" Margin="0,24,0,0">
+                        <Border Background="#2E1B47" CornerRadius="2"/>
+                        <Border x:Name="LoadingBar" Width="70" Height="4" Background="#B388FF"
+                                CornerRadius="2" HorizontalAlignment="Left">
+                            <Border.RenderTransform>
+                                <TranslateTransform x:Name="LoadingBarTransform" X="-70"/>
+                            </Border.RenderTransform>
+                        </Border>
+                    </Grid>
+                    <TextBlock x:Name="LoadingText" Text="Starting renderer..." Foreground="#D8CCF0"
+                               FontSize="12" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                </StackPanel>
+            </Grid>
         </Grid>
 
         <!-- ================= Status bar ================= -->
@@ -117,7 +142,24 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBlock x:Name="StatusText" Grid.Column="0" Foreground="#A996C9" FontSize="11" Text="Starting…"/>
+                <TextBlock x:Name="StatusText" Grid.Column="0" Foreground="#A996C9" FontSize="11" Text="Starting..."/>
+                <Border x:Name="RefreshBadge" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Background="#E61E1230" BorderBrush="#5B3E86" BorderThickness="1"
+                        CornerRadius="12" Padding="10,3" Margin="0,0,12,0" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal">
+                        <Grid Width="12" Height="12" VerticalAlignment="Center">
+                            <Ellipse Stroke="#4A2D70" StrokeThickness="1.8"/>
+                            <Path Data="M 6 0.5 A 5.5 5.5 0 0 1 11.5 6" Stroke="#B388FF" StrokeThickness="1.8"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" RenderTransformOrigin="0.5,0.5">
+                                <Path.RenderTransform>
+                                    <RotateTransform x:Name="RefreshSpin"/>
+                                </Path.RenderTransform>
+                            </Path>
+                        </Grid>
+                        <TextBlock Text="Refreshing from Revit..." Foreground="#EAE2F8" FontSize="11"
+                                   VerticalAlignment="Center" Margin="7,0,0,0"/>
+                    </StackPanel>
+                </Border>
                 <TextBlock x:Name="EngineText" Grid.Column="2" Foreground="#7E6C9E" FontSize="11" Text=""/>
             </Grid>
         </Border>

@@ -79,8 +79,6 @@ public static class Program
                     if (app.Dispatcher.CheckAccess()) a();
                     else app.Dispatcher.BeginInvoke(DispatcherPriority.Normal, a);
                 });
-                connection.Start();
-                _ = connection.SendHelloAsync(engine.EngineVersion, ThisVersion());
             }
             catch (Exception ex)
             {
@@ -91,6 +89,15 @@ public static class Program
 
         var window = new MainWindow(engine, settings, connection);
         if (!string.IsNullOrEmpty(doc)) window.SetDocumentName(doc);
+
+        // Start reading only after the window subscribed to the connection events — otherwise the
+        // scene Revit sends right after connecting can arrive before any handler exists and be lost.
+        if (connection != null)
+        {
+            connection.Start();
+            _ = connection.SendHelloAsync(engine.EngineVersion, ThisVersion());
+        }
+
         app.Run(window);
         return 0;
     }
