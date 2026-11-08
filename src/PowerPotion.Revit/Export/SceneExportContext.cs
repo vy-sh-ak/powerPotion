@@ -26,19 +26,15 @@ public sealed class SceneExportContext : IExportContext
     private readonly List<LightDto> _lights = new();
     private int _vertexBase;
 
-    // instance definition dedup (family symbols): geometry key → model id
-    private readonly Dictionary<string, int> _definitionIds = new();
+    // nested instance/link transforms: outer-most first; geometry is transformed to world space
+    private readonly List<Transform> _transformStack = new();
     private readonly List<ModelDto> _models = new();
     private readonly List<InstanceDto> _instances = new();
     private readonly HashSet<int> _modelIdsUsed = new();
 
-    // stack of geometry collectors for nested instances/links
-    private readonly Stack<Collector> _collectors = new();
     private ElementId _currentMaterialId = ElementId.InvalidElementId;
     private MaterialNode? _currentMaterialNode;
-    private Transform _currentTransform = Transform.Identity;
-    private bool _isInstanceContext;
-    private string? _currentInstanceKey;
+    private int _elementDepth;
     private int _currentElementModelId;
     private ulong _currentFamilyClass;
 
@@ -97,54 +93,49 @@ public sealed class SceneExportContext : IExportContext
                 return RenderNodeAction.Proceed; // link traversal begins
         }
         catch { }
-        ResetElementState();
-        _currentElementModelId = NextModelId();
-        _currentFamilyClass = FamilyClassOf(elementId);
+
+        // Nested element nodes (links/groups) keep accumulating into the outermost element's model.
+        if (_elementDepth++ == 0)
+        {
+            ResetElementState();
+            _currentElementModelId = NextModelId();
+            _currentFamilyClass = FamilyClassOf(elementId);
+        }
         return RenderNodeAction.Proceed;
     }
 
     public void OnElementEnd(ElementId elementId)
     {
-        FlushElementGeometry(persistentKey: null, transformation: null);
+        if (_elementDepth > 0) _elementDepth--;
+        if (_elementDepth == 0) FlushElementGeometry();
     }
 
     public RenderNodeAction OnInstanceBegin(InstanceNode node)
     {
-        var symbolGeometryId = node.GetSymbolGeometryId();
-        _currentInstanceKey = symbolGeometryId?.AsUniqueIdentifier() ?? Guid.NewGuid().ToString("N");
-        ResetElementState();
-        _isInstanceContext = true;
+        // Instance geometry is delivered in the symbol's local coordinates: push the placement so
+        // every polymesh point is flattened into world space (same information Enscape carries in
+        // ExportedModelInstance.Transformation, applied at push time here).
+        try { _transformStack.Add(node.GetTransform()); }
+        catch { _transformStack.Add(Transform.Identity); }
         return RenderNodeAction.Proceed;
     }
 
     public void OnInstanceEnd(InstanceNode node)
     {
-        // dedup: reuse the definition if this symbol was already exported
-        if (_currentInstanceKey != null && _definitionIds.TryGetValue(_currentInstanceKey, out var existing))
-        {
-            // geometry already stored under `existing`; only add the instance placement
-            var transform = node.GetTransform();
-            _instances.Add(new InstanceDto
-            {
-                ModelId = existing,
-                InstanceId = NextInstanceId(),
-                Matrix = EngineSpace.Matrix(transform),
-            });
-            _modelIdsUsed.Add(existing);
-        }
-        else
-        {
-            var modelId = _currentElementModelId != 0 ? _currentElementModelId : NextModelId();
-            if (_currentInstanceKey != null)
-                _definitionIds[_currentInstanceKey] = modelId;
-            FlushElementGeometry(persistentKey: _currentInstanceKey, transformation: node.GetTransform());
-        }
-        _isInstanceContext = false;
-        _currentInstanceKey = null;
+        if (_transformStack.Count > 0) _transformStack.RemoveAt(_transformStack.Count - 1);
     }
 
-    public RenderNodeAction OnLinkBegin(LinkNode node) => RenderNodeAction.Proceed;
-    public void OnLinkEnd(LinkNode node) { }
+    public RenderNodeAction OnLinkBegin(LinkNode node)
+    {
+        try { _transformStack.Add(node.GetTransform()); }
+        catch { _transformStack.Add(Transform.Identity); }
+        return RenderNodeAction.Proceed;
+    }
+
+    public void OnLinkEnd(LinkNode node)
+    {
+        if (_transformStack.Count > 0) _transformStack.RemoveAt(_transformStack.Count - 1);
+    }
 
     public RenderNodeAction OnFaceBegin(FaceNode node) => RenderNodeAction.Proceed;
     public void OnFaceEnd(FaceNode node) { }
@@ -206,11 +197,14 @@ public sealed class SceneExportContext : IExportContext
         var matDto = _currentMaterialId != ElementId.InvalidElementId ? _materials.GetOrParse(_currentMaterialId) : null;
         int materialEngineId = matDto?.Id ?? 0;
 
+        var uvs = topology.NumberOfUVs > 0 ? topology.GetUVs() : null;
+
         foreach (var facet in facets)
         {
             var i0 = facet.V1;
             var i1 = facet.V2;
             var i2 = facet.V3;
+            if (i0 == i1 || i1 == i2 || i0 == i2) continue;
 
             var p0 = points[i0];
             var p1 = points[i1];
@@ -235,18 +229,17 @@ public sealed class SceneExportContext : IExportContext
             }
             facetIndexCounter++;
 
-            var uvs = topology.GetUVs();
-            var uv0 = i0 < uvs.Count ? uvs[i0] : UV.Zero;
-            var uv1 = i1 < uvs.Count ? uvs[i1] : UV.Zero;
-            var uv2 = i2 < uvs.Count ? uvs[i2] : UV.Zero;
+            var uv0 = uvs != null && i0 < uvs.Count ? uvs[i0] : UV.Zero;
+            var uv1 = uvs != null && i1 < uvs.Count ? uvs[i1] : UV.Zero;
+            var uv2 = uvs != null && i2 < uvs.Count ? uvs[i2] : UV.Zero;
 
-            // vertex positions/normals in engine space
-            var a = EngineSpace.Point(p0);
-            var b = EngineSpace.Point(p1);
-            var c = EngineSpace.Point(p2);
-            var na = EngineSpace.Vector(n0);
-            var nb = EngineSpace.Vector(n1);
-            var nc = EngineSpace.Vector(n2);
+            // flatten nested instance/link placements, then convert feet → meters / Z-up → Y-up
+            var a = EngineSpace.Point(ToWorld(p0));
+            var b = EngineSpace.Point(ToWorld(p1));
+            var c = EngineSpace.Point(ToWorld(p2));
+            var na = EngineSpace.Vector(DirToWorld(n0));
+            var nb = EngineSpace.Vector(DirToWorld(n1));
+            var nc = EngineSpace.Vector(DirToWorld(n2));
 
             int baseIndex = _vertexBase;
             _positions.Add((float)a.Item1); _positions.Add((float)a.Item2); _positions.Add((float)a.Item3);
@@ -255,9 +248,10 @@ public sealed class SceneExportContext : IExportContext
             _normals.Add((float)na.Item1); _normals.Add((float)na.Item2); _normals.Add((float)na.Item3);
             _normals.Add((float)nb.Item1); _normals.Add((float)nb.Item2); _normals.Add((float)nb.Item3);
             _normals.Add((float)nc.Item1); _normals.Add((float)nc.Item2); _normals.Add((float)nc.Item3);
-            _uvs.Add((float)uv0.U); _uvs.Add((float)uv0.V);
-            _uvs.Add((float)uv1.U); _uvs.Add((float)uv1.V);
-            _uvs.Add((float)uv2.U); _uvs.Add((float)uv2.V);
+            // Revit UVs are in feet (Enscape scales them to meters the same way).
+            _uvs.Add((float)(uv0.U * EngineSpace.FeetToMeters)); _uvs.Add((float)(uv0.V * EngineSpace.FeetToMeters));
+            _uvs.Add((float)(uv1.U * EngineSpace.FeetToMeters)); _uvs.Add((float)(uv1.V * EngineSpace.FeetToMeters));
+            _uvs.Add((float)(uv2.U * EngineSpace.FeetToMeters)); _uvs.Add((float)(uv2.V * EngineSpace.FeetToMeters));
             _vertexBase += 3;
 
             _indices.Add((uint)baseIndex);
@@ -265,6 +259,7 @@ public sealed class SceneExportContext : IExportContext
             _indices.Add((uint)(baseIndex + 2));
         }
 
+        if (_indices.Count == groupIdStart) return;
         _groups.Add(new MaterialIndexGroupDto
         {
             StartIndex = groupIdStart,
@@ -276,19 +271,29 @@ public sealed class SceneExportContext : IExportContext
         });
     }
 
-    private void FlushElementGeometry(string? persistentKey, Transform? transformation)
+    /// <summary>Applies the active instance/link transform stack (outermost first) to a point.</summary>
+    private XYZ ToWorld(XYZ point)
+    {
+        for (int i = _transformStack.Count - 1; i >= 0; i--)
+            point = _transformStack[i].OfPoint(point);
+        return point;
+    }
+
+    /// <summary>Applies the active instance/link transform stack to a direction (no translation).</summary>
+    private XYZ DirToWorld(XYZ direction)
+    {
+        for (int i = _transformStack.Count - 1; i >= 0; i--)
+            direction = _transformStack[i].OfVector(direction);
+        return direction.IsZeroLength() ? XYZ.BasisZ : direction.Normalize();
+    }
+
+    private void FlushElementGeometry()
     {
         if (_positions.Count == 0) return;
 
-        var modelId = _currentElementModelId;
-        if (_isInstanceContext && persistentKey != null && _definitionIds.TryGetValue(persistentKey, out var existingId))
-        {
-            modelId = existingId;
-        }
-
         _models.Add(new ModelDto
         {
-            Id = modelId,
+            Id = _currentElementModelId,
             FamilyClass = _currentFamilyClass,
             Positions = _positions.ToArray(),
             Normals = _normals.ToArray(),
@@ -296,16 +301,17 @@ public sealed class SceneExportContext : IExportContext
             Indices = _indices.ToArray(),
             Groups = _groups.ToArray(),
         });
-        _modelIdsUsed.Add(modelId);
+        _modelIdsUsed.Add(_currentElementModelId);
 
+        // Geometry has already been flattened into world space, so the instance is identity.
         _instances.Add(new InstanceDto
         {
-            ModelId = modelId,
+            ModelId = _currentElementModelId,
             InstanceId = NextInstanceId(),
-            Matrix = transformation != null
-                ? EngineSpace.Matrix(transformation)
-                : IdentityMatrix(),
+            Matrix = IdentityMatrix(),
         });
+
+        ResetElementState();
     }
 
     private static float[] IdentityMatrix() => new float[]
@@ -424,10 +430,5 @@ public sealed class SceneExportContext : IExportContext
         foreach (var m in _materials.AllParsed())
             _world.Materials.Add(m);
         return _world;
-    }
-
-    private sealed class Collector
-    {
-        public List<float> Positions = new();
     }
 }

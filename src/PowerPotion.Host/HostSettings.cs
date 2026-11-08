@@ -90,12 +90,17 @@ public sealed class HostSettings
     private static string I(double v) => v.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private static string I(bool v) => v ? "1" : "0";
 
+    /// <summary>Commands that the engine only accepts before initialization (r_hwrt / r_dlss).</summary>
+    public IEnumerable<string> ToPreInitCommands() => new[]
+    {
+        $"r_hwrt {I(HardwareRayTracing)}",
+        $"r_dlss {I(Dlss)}",
+    };
+
     /// <summary>Applies every setting to the engine as console commands.</summary>
     public IEnumerable<(string Command, bool Deferred)> ToCommands() => new[]
     {
         ($"sys_spec {I(QualityLevel)}", false),
-        ($"r_hwrt {I(HardwareRayTracing)}", false),
-        ($"r_dlss {I(Dlss)}", false),
         ($"r_rtSunShadows {I(RtSunShadows)}", true),
         ($"r_restir {I(RtArtificialLights)}", true),
         ($"r_skyboxRotation {I(SkyboxRotation)}", true),

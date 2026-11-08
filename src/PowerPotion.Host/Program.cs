@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net.Sockets;
 using System.Windows;
+using System.Windows.Threading;
 using PowerPotion.Host;
 using PowerPotion.Host.Enscape;
 using PowerPotion.Host.Net;
@@ -45,6 +46,7 @@ public static class Program
         var dataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PowerPotion");
         EngineBridge.InstallAssemblyResolver(enscapeDir);
+        HostLog.Initialize(Path.Combine(dataDir, "Logs"));
 
         if (selftest)
         {
@@ -53,6 +55,16 @@ public static class Program
 
         var settings = HostSettings.Load();
         var app = new Application();
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            HostLog.Write("AppDomain unhandled: " + e.ExceptionObject);
+        app.DispatcherUnhandledException += (_, e) =>
+        {
+            HostLog.Exception("Dispatcher unhandled", e.Exception);
+            HostLog.Write("Dispatcher unhandled stack: " + Environment.StackTrace);
+        };
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+            HostLog.Exception("Unobserved task", e.Exception);
+
         var engine = new EngineBridge(enscapeDir, dataDir);
 
         HostConnection? connection = null;
@@ -62,7 +74,11 @@ public static class Program
             {
                 var client = new TcpClient();
                 client.Connect("127.0.0.1", port);
-                connection = new HostConnection(client, a => app.Dispatcher.Invoke(a));
+                connection = new HostConnection(client, a =>
+                {
+                    if (app.Dispatcher.CheckAccess()) a();
+                    else app.Dispatcher.BeginInvoke(DispatcherPriority.Normal, a);
+                });
                 connection.Start();
                 _ = connection.SendHelloAsync(engine.EngineVersion, ThisVersion());
             }

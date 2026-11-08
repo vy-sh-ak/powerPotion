@@ -1,4 +1,5 @@
 using System.IO;
+using GlmSharp;
 using PowerPotion.Host.Enscape;
 using PowerPotion.Protocol;
 
@@ -23,7 +24,7 @@ public static class SelfTest
     public static int Run(string enscapeDir, string dataDir, int frames, string? shotPath)
     {
         Directory.CreateDirectory(dataDir);
-        shotPath = Path.Combine(dataDir, "selftest.png");
+        shotPath = string.IsNullOrWhiteSpace(shotPath) ? Path.Combine(dataDir, "selftest.png") : shotPath;
         var logPath = Path.Combine(dataDir, "selftest.log");
         _log = new StreamWriter(logPath, append: false);
 
@@ -154,6 +155,9 @@ public static class SelfTest
     /// <summary>Axis gizmo: red box on +X (east), green box up, blue box on -Z (north), plus a floor.</summary>
     private static WorldSnapshot BuildSyntheticWorld()
     {
+        if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("POWERPOTION_PROBE")))
+            return BuildProbeWorld();
+
         var world = new WorldSnapshot { DocumentName = "selftest", ViewName = "synthetic" };
 
         world.Materials.Add(new MaterialDto { Id = 101, Name = "Red", DiffuseR = 0.85f, DiffuseG = 0.05f, DiffuseB = 0.05f, Roughness = 0.4f });
@@ -182,6 +186,88 @@ public static class SelfTest
         // red box LEFT of green (engine +X renders screen-left when facing -Z), blue box ABOVE green.
         world.Camera = TopDownCamera();
         return world;
+    }
+
+    private static WorldSnapshot BuildProbeWorld()
+    {
+        float size = EnvFloat("POWERPOTION_PROBE_SIZE", 2f);
+        float dist = EnvFloat("POWERPOTION_PROBE_Z", 6f);
+        float fov = EnvFloat("POWERPOTION_PROBE_FOV", 60f);
+        bool cubeOnly = Environment.GetEnvironmentVariable("POWERPOTION_PROBE_CUBE_ONLY") == "1";
+
+        var world = new WorldSnapshot { DocumentName = "probe", ViewName = "probe" };
+        world.Materials.Add(new MaterialDto { Id = 201, Name = "Red", DiffuseR = 0.8f, DiffuseG = 0.08f, DiffuseB = 0.08f, Roughness = 0.5f });
+        world.Materials.Add(new MaterialDto { Id = 202, Name = "Ground", DiffuseR = 0.55f, DiffuseG = 0.55f, DiffuseB = 0.55f, Roughness = 0.9f });
+
+        // Cube resting on the origin (or centred on it for the cube-only calibration scene).
+        float y0 = cubeOnly ? -size / 2f : 0f;
+        var cube = MakeBox(201, -size / 2f, y0, -size / 2f, size / 2f, y0 + size, size / 2f);
+        world.Models.Add(cube);
+        world.Instances.Add(new InstanceDto { ModelId = cube.Id, InstanceId = 201, Matrix = Translate(0f, 0f, 0f) });
+
+        if (!cubeOnly)
+        {
+            var ground = MakeQuad(202, 10f);
+            world.Models.Add(ground);
+            world.Instances.Add(new InstanceDto { ModelId = ground.Id, InstanceId = 202, Matrix = Translate(0f, 0f, 0f) });
+        }
+
+        world.Sun = new SunUpdate { Mode = 0, Latitude = 48.14, Longitude = 11.58, NorthAngle = 0, TimeZoneHours = 1, Hour = 14f };
+        var eye = EnvVec("POWERPOTION_PROBE_EYE", new[] { 0f, y0 + size / 2f, dist });
+        var target = EnvVec("POWERPOTION_PROBE_TARGET", new[] { 0f, y0 + size / 2f, 0f });
+        world.Camera = LookAt(eye, target, new[] { 0f, 1f, 0f }, fov);
+        return world;
+    }
+
+    private static float[] EnvVec(string name, float[] fallback)
+    {
+        var raw = Environment.GetEnvironmentVariable(name);
+        if (string.IsNullOrWhiteSpace(raw)) return fallback;
+        var parts = raw.Split(',');
+        if (parts.Length != 3) return fallback;
+        var result = new float[3];
+        for (int i = 0; i < 3; i++)
+        {
+            if (!float.TryParse(parts[i], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out result[i]))
+                return fallback;
+        }
+        return result;
+    }
+
+    private static float EnvFloat(string name, float fallback)
+    {
+        var raw = Environment.GetEnvironmentVariable(name);
+        return float.TryParse(raw, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : fallback;
+    }
+
+    private static CameraUpdate LookAt(float[] eye, float[] target, float[] up, float fov)
+    {
+        vec3 f = new vec3(target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]).Normalized;
+        vec3 r = vec3.Cross(f, new vec3(up[0], up[1], up[2])).Normalized;
+        vec3 u = vec3.Cross(r, f);
+
+        // rotation matrix columns [right, up, back=-forward]
+        float r00 = r.x, r10 = r.y, r20 = r.z;
+        float r01 = u.x, r11 = u.y, r21 = u.z;
+        float r02 = -f.x, r12 = -f.y, r22 = -f.z;
+
+        float trace = r00 + r11 + r22;
+        float s = (float)Math.Sqrt(trace + 1.0) * 2f;
+        float qw = 0.25f * s;
+        float qx = (r21 - r12) / s;
+        float qy = (r02 - r20) / s;
+        float qz = (r10 - r01) / s;
+
+        return new CameraUpdate
+        {
+            PosX = eye[0], PosY = eye[1], PosZ = eye[2],
+            QuatX = qx, QuatY = qy, QuatZ = qz, QuatW = qw,
+            FovDegrees = fov,
+            Ortho = false,
+            AutoExposure = true,
+        };
     }
 
     /// <summary>
@@ -268,7 +354,7 @@ public static class SelfTest
         m.Positions = new float[] { -halfSize, 0, -halfSize, halfSize, 0, -halfSize, halfSize, 0, halfSize, -halfSize, 0, halfSize };
         m.Normals = new float[] { 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0 };
         m.Uvs = new float[] { 0, 0, 1, 0, 1, 1, 0, 1 };
-        m.Indices = new uint[] { 0, 1, 2, 0, 2, 3 };
+        m.Indices = new uint[] { 0, 2, 1, 0, 3, 2 };
         m.Groups = new[] { new MaterialIndexGroupDto
         {
             StartIndex = 0,

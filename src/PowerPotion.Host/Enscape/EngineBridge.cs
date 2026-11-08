@@ -59,6 +59,9 @@ public sealed class EngineBridge : IDisposable
     public event Action? ClosedFromEngine;
     public event Action<bool>? CaptureFinished;
 
+    /// <summary>Console commands passed to the engine before initialization (e.g. r_hwrt, r_dlss).</summary>
+    public List<string> PreInitCommands { get; } = new();
+
     public EngineBridge(string enscapeDir, string dataDir)
     {
         _enscapeDir = enscapeDir;
@@ -78,27 +81,54 @@ public sealed class EngineBridge : IDisposable
 
         Directory.CreateDirectory(_dataDir);
         Directory.CreateDirectory(_logDir);
+        DeployRendererResources(appdataEnscape);
+    }
+
+    /// <summary>
+    /// Mirrors Enscape's RendererResourcesUpdater: deploy the shipped horizon/ground textures into the
+    /// engine's writable data directory. Without this the engine logs
+    /// "Texture loading - does not exist: …\Data\Textures\Horizons/whiteGround.ktx2" and the ground
+    /// plane renders without its texture.
+    /// </summary>
+    private void DeployRendererResources(string appDataEnscape)
+    {
+        try
+        {
+            var source = Path.Combine(_enscapeDir, "Data", "Horizons");
+            if (!Directory.Exists(source)) return;
+            var target = Path.Combine(appDataEnscape, "Data", "Textures", "Horizons");
+            Directory.CreateDirectory(target);
+            foreach (var file in Directory.EnumerateFiles(source))
+            {
+                var destination = Path.Combine(target, Path.GetFileName(file));
+                if (!File.Exists(destination))
+                    File.Copy(file, destination);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogLine("Renderer resource deployment skipped: " + ex.Message);
+        }
     }
 
     private void LogLine(string msg) => Log?.Invoke(msg);
 
     /// <summary>
-    /// Empirical engine calibration factor. The engine stores pushed geometry 1:1 (verified via
-    /// GetEntityGroupBoundingBox) but its RENDER pipeline displays pushed geometry at 1/11.25 of
-    /// the pushed values, while the SetCamera position renders 1:1 (all measured precisely on
-    /// identity-instanced quads across camera heights and floor sizes). Frustum culling, however,
-    /// runs in RAW pushed space against the RAW camera: geometry whose raw (unscaled) bounding
-    /// box lies above the raw camera or far outside its raw frustum is culled even when its
-    /// rendered position is inside the view.
-    ///
-    /// Consequences (all encoded in this bridge):
-    ///  • model vertices and instance translations are multiplied by this factor on push
-    ///    (protocol carries true meters → renders at true meters relative to the camera);
-    ///  • camera positions are pushed raw (meters);
-    ///  • the camera's raw Y should stay above the raw Y extent of nearby geometry so the raw
-    ///    culling frustum (which opens downward from the camera) contains it.
+    /// Engine unit calibration. Measured on the shipped engine: pushed geometry, instance translations,
+    /// lights and the camera are all interpreted in **meters 1:1** (a 1 m cube with the camera 10 m away
+    /// renders at the expected size). Protocol data is already meters, so no scaling is applied.
+    /// The value is kept configurable for diagnostics only.
     /// </summary>
-    public const float GeometryScale = 11.25f;
+    public static float GeometryScale { get; } = ReadGeometryScale();
+
+    private static float ReadGeometryScale()
+    {
+        var raw = Environment.GetEnvironmentVariable("POWERPOTION_GEOMSCALE");
+        return float.TryParse(raw, System.Globalization.NumberStyles.Float,
+            System.Globalization.CultureInfo.InvariantCulture, out var v) && v > 0
+            ? v
+            : 1f;
+    }
 
     // ------------------------------------------------------------------
     // Assembly + native loading
@@ -162,8 +192,9 @@ public sealed class EngineBridge : IDisposable
         {
             "g_displayLoadingScreen 0",
             "g_locale en",
-            "sp_viewSync 1",
+            "g_trial 0",
         };
+        preInit.AddRange(PreInitCommands);
 
         _initialized = new TaskCompletionSource<EnscapeResult>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -172,14 +203,15 @@ public sealed class EngineBridge : IDisposable
             IsStandalone = false,
             EnableRpc = true,
             EnableVideoPathEditor = false,
-            HostApplication = HostApplication.SDK, // geometry is pushed in meters by PowerPotion
-                                                   // (HostApplication.REVIT makes the engine apply
-                                                   // a Revit-feet unit conversion to pushed geometry)
-            // The engine resolves its config files (systemPre.cfg etc.) and SystemData relative to
-            // WorkingDirectory — that is the "Renderer" subdirectory of the install (verified against
-            // the decompiled config loader in Enscape.WindowAPI.dll and a live init).
-            WorkingDirectory = WorkDirOverride ?? Path.Combine(_enscapeDir, "Renderer"),
-            BaseDirectoryWriteable = WritableOverride ?? _dataDir,
+            // Mirrors Enscape's own host for Revit (RendererWindow.StartRendererAsync). The engine's
+            // units are not affected by this value: the CAD side already sends meters.
+            HostApplication = ResolveHostApplication(),
+            // Chaos' own host leaves WorkingDirectory and BaseDirectoryWriteable unset (null): the engine
+            // derives them from its module location (Renderer\Bin64 → Renderer for systemPre.cfg, and the
+            // roaming app-data directory for caches/user configs). Setting them to our own paths made the
+            // engine miss systemPre.cfg — keep them null exactly like the shipped host.
+            WorkingDirectory = WorkDirOverride,
+            BaseDirectoryWriteable = WritableOverride,
         };
 
         // PreInitCommands is a wchar_t** on the native side: an array of `count` pointers, each to a
@@ -242,6 +274,8 @@ public sealed class EngineBridge : IDisposable
         };
 
         LogLine("Starting embedded renderer…");
+        HostLog.Write($"StartRendererNative parent=0x{parentHwnd:X} rect={x},{y} {width}x{height} " +
+                      $"workDir='{init.WorkingDirectory}' writable='{init.BaseDirectoryWriteable}' legacy={UseLegacyStart}");
         // Mirror the shipped host: its exe runs with CWD = RendererHost dir; the engine's early
         // file probing may rely on that.
         var previousCwd = Environment.CurrentDirectory;
@@ -291,12 +325,22 @@ public sealed class EngineBridge : IDisposable
     /// <summary>Diagnostics: override WorkingDirectory passed to the engine.</summary>
     public static string? WorkDirOverride { get; set; } = Environment.GetEnvironmentVariable("POWERPOTION_WORKDIR");
 
+    /// <summary>
+    /// Host application identity reported to the engine (Enscape uses REVIT for the Revit add-in).
+    /// Kept as a method so no Enscape.RendererApi type is touched before the assembly resolver is installed.
+    /// </summary>
+    private static HostApplication ResolveHostApplication() =>
+        string.Equals(Environment.GetEnvironmentVariable("POWERPOTION_HOSTAPP"), "SDK", StringComparison.OrdinalIgnoreCase)
+            ? HostApplication.SDK
+            : HostApplication.REVIT;
+
     /// <summary>Diagnostics: override BaseDirectoryWriteable passed to the engine.</summary>
     public static string? WritableOverride { get; set; } = Environment.GetEnvironmentVariable("POWERPOTION_WRITABLE");
 
     /// <summary>Waits for engine initialization and attaches the managed API facade.</summary>
     public async Task<EnscapeResult> AttachWhenReadyAsync(CancellationToken ct)
     {
+        HostLog.Write("AttachWhenReadyAsync: waiting for OnInitialized");
         if (_initialized == null)
             return EnscapeResult.INVALID_STATE;
 
@@ -307,6 +351,7 @@ public sealed class EngineBridge : IDisposable
         if (EnscapeAPI.IsError(initResult))
             return initResult;
 
+        HostLog.Write("AttachWhenReadyAsync: attaching managed instance");
         // Attach the managed facade to the native instance.
         var startupParams = new StartupParameters
         {
@@ -334,6 +379,7 @@ public sealed class EngineBridge : IDisposable
         LogLine($"Renderer window handle: 0x{hwnd:X}");
 
         LogLine("Engine ready.");
+        HostLog.Write("AttachWhenReadyAsync: engine ready");
         return EnscapeResult.OK;
     }
 
@@ -348,6 +394,16 @@ public sealed class EngineBridge : IDisposable
 
     public void NotifyMinimize(bool minimized) =>
         EnscapeNativeWindowApi.EnscapeEmbeddedWindow_TriggerMinimizeChanged(_instance, minimized);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern IntPtr SetFocus(IntPtr hWnd);
+
+    /// <summary>Gives keyboard focus to the native render window (diagnostics / input tests).</summary>
+    public void FocusRenderWindow()
+    {
+        if (NativeWindowHandle != IntPtr.Zero)
+            SetFocus(NativeWindowHandle);
+    }
 
     public async Task StopAsync()
     {
@@ -448,15 +504,12 @@ public sealed class EngineBridge : IDisposable
         }
 
         // UpdateWorld commits asynchronously; the world becomes visible when the callback fires.
-        var worldUpdated = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Do not block the UI thread waiting for it (Chaos' host is asynchronous here too).
         _onWorldUpdated = code =>
         {
             LogLine($"World update finished: {code}");
-            worldUpdated.TrySetResult(code == 0);
         };
         worldApi.UpdateWorld(_onWorldUpdated);
-        if (!worldUpdated.Task.Wait(TimeSpan.FromSeconds(30)))
-            LogLine("World update timed out — the scene may appear incomplete.");
 
         ApplySun(world.Sun);
         ApplyCamera(world.Camera);
@@ -712,9 +765,11 @@ public sealed class EngineBridge : IDisposable
         if (cam.FovDegrees > 0 && CamFields.Fov != null && CamFields.FovType != null)
         {
             flags |= EnscapeAPI.CameraFlags.FOV;
+            // CameraParams.fov is in RADIANS (the shipped RendererHost calls camera.SetFov(fovInRadians, type)).
+            var fovRadians = cam.FovDegrees * (MathF.PI / 180f);
             p = WithBoxed(p, boxed =>
             {
-                CamFields.Fov.SetValue(boxed, cam.FovDegrees);
+                CamFields.Fov.SetValue(boxed, fovRadians);
                 CamFields.FovType.SetValue(boxed, (EnscapeAPI.FovType)cam.FovType);
             });
         }
@@ -750,31 +805,17 @@ public sealed class EngineBridge : IDisposable
         if (CamFields.ActiveFields != null)
             p = WithBoxed(p, boxed => CamFields.ActiveFields.SetValue(boxed, flags));
 
-        // Read-back diagnostics: confirm the reflection writes actually landed in the struct.
-        try
-        {
-            var f = (EnscapeAPI.CameraFlags?)(CamFields.ActiveFields?.GetValue(BoxOf(p)));
-            var fv = (float?)(CamFields.Fov?.GetValue(BoxOf(p)));
-            var ft = (EnscapeAPI.FovType?)(CamFields.FovType?.GetValue(BoxOf(p)));
-            LogLine($"SetCamera fields: flags={f} fov={fv} fovType={ft} pos={p.Position} quat={p.Orientation}");
-        }
-        catch { }
-
         var result = api.SetCamera(ref p, CameraTransitionFlags.NONE);
-        LogLine($"SetCamera result: {result}");
         if (EnscapeAPI.IsError(result)) LogLine($"SetCamera: {result}");
+        else if (_cameraLogBudget-- > 0)
+            LogLine($"SetCamera ok: pos={p.Position} quat={p.Orientation} fov={cam.FovDegrees:0.##}deg");
 
-        try
-        {
-            var readBack = new EnscapeAPI.CameraParams();
-            var gr = api.GetCamera(out readBack);
-            LogLine($"GetCamera after set: {gr} pos={readBack.Position} quat={readBack.Orientation} fov={readBack.Fov}");
-            // Ask the engine to verbosely report its own camera state (diagnostics).
-            if (_scope?.TryGetSettingsApi(out var settings) == true)
-                settings.ExecuteConsoleCommand("api_cameraHeavyReportInterval 1", false);
-        }
-        catch (Exception ex) { LogLine("GetCamera failed: " + ex.Message); }
+        if (++_cameraUpdateCount % 30 == 0)
+            LogLine($"camera stream: {_cameraUpdateCount} updates");
     }
+
+    private int _cameraUpdateCount;
+    private int _cameraLogBudget = 3;
 
     private static EnscapeAPI.CameraParams WithBoxed(EnscapeAPI.CameraParams p, Action<object> mutate)
     {
@@ -782,8 +823,6 @@ public sealed class EngineBridge : IDisposable
         mutate(boxed);
         return (EnscapeAPI.CameraParams)boxed;
     }
-
-    private static object BoxOf(EnscapeAPI.CameraParams p) => p;
 
     public void SetSectionPlanes(float[] planesXyzd)
     {
@@ -814,6 +853,31 @@ public sealed class EngineBridge : IDisposable
     public void WaitForFrames(ulong frames)
     {
         try { World().WaitForNumFramesRendered(frames); } catch { }
+    }
+
+    /// <summary>Reads the engine's current camera (used to follow engine-side navigation).</summary>
+    public CameraUpdate? ReadCamera()
+    {
+        if (_scope?.TryGetCameraApi(out var api) != true) return null;
+        try
+        {
+            var p = new EnscapeAPI.CameraParams();
+            if (EnscapeAPI.IsError(api.GetCamera(out p))) return null;
+            return new CameraUpdate
+            {
+                PosX = p.Position.x,
+                PosY = p.Position.y,
+                PosZ = p.Position.z,
+                QuatX = p.Orientation.x,
+                QuatY = p.Orientation.y,
+                QuatZ = p.Orientation.z,
+                QuatW = p.Orientation.w,
+                FovDegrees = p.Fov * (180f / MathF.PI),
+                FovType = (int)p.FovType,
+                AutoExposure = true,
+            };
+        }
+        catch { return null; }
     }
 
     // ------------------------------------------------------------------

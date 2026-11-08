@@ -40,9 +40,9 @@ Key facts that shaped PowerPotion's design:
    license layer gets full engine functionality. (The engine remains the user's licensed Enscape
    installation — PowerPotion does not patch or circumvent anything inside it.)
 2. **The engine is embedded via `EnscapeEmbeddedWindow_StartRenderer2`** (from `Enscape.WindowApi.dll`),
-   which takes a parent HWND + rect, an init-params struct (working dir, pre-init console commands), and
-   callbacks; it creates the native render window as a child HWND and returns an instance handle used by
-   every other `Enscape_*` API.
+   which takes the host's top-level HWND + the renderer placeholder's screen rectangle, an init-params
+   struct (working dir, pre-init console commands), and callbacks. The engine creates its own window at
+   that rectangle; the host re-styles it as a child and reparents it into its visual tree.
 3. **Everything (geometry, materials, lights, sun, camera) is pushed through 24 API scopes** obtained via
    `EnscapeInstance.BeginApiScope()` (`IEnscapeApiScope.TryGetWorldApi/CaptureApi/SettingsApi/…`).
 4. **Settings are console-command (CVar) strings** (`r_skyboxFile`, `r_cloudDensity`, `r_fog`,
@@ -72,43 +72,71 @@ Revit 2026
 
 Both processes exchange `PowerPotion.Protocol` messages (length-prefixed little-endian binary frames).
 
-## Empirical engine calibration (validated against a live engine)
+## Engine behavior verified against the shipped host (4.7.0.57)
 
-Facts established by rendering probe scenes and interrogating the running engine
-(`GetCamera`, `GetEntityGroupBoundingBox`, console CVars, pixel measurements):
+Facts re-established from the decompiled `Enscape.RendererHost.dll`/`Enscape.RendererApi.dll`,
+the decompiled Revit plugin, and controlled renders on the installed engine:
 
-1. **World storage**: pushed geometry/instance transforms are stored 1:1
-   (`GetEntityGroupBoundingBox` returns exactly the pushed raw values).
-2. **Render scale**: the render pipeline displays pushed geometry at **1/11.25** of the
-   pushed values while the `SetCamera` position renders 1:1. The bridge therefore pushes
-   all world-space quantities × `GeometryScale = 11.25` (`EngineBridge.GeometryScale`)
-   and the camera raw, so the scene renders at true meters.
-3. **Culling**: frustum culling runs in RAW pushed space against the RAW camera — geometry whose
-   raw (×11.25) bounding box lies above the raw camera or far outside its raw frustum is culled
-   even when its rendered position is inside the view. The camera's raw Y must therefore stay
-   above the highest raw geometry Y for a scene to be fully visible.
-4. **Init params**: `EnscapeEmbeddedWindow_StartRenderer2` requires
-   * `WorkingDirectory = <Enscape>\RendererHost\Renderer` (engine resolves its
-     `systemPre.cfg`/`userPre.cfg` and SystemData from there),
-   * `BaseDirectoryWriteable = %APPDATA%\Enscape` (engine extracts runtime textures there;
-     sharing the real product's dir is required for e.g. the loading overlay),
-   * `PreInitCommands` as `wchar_t**` (an array of pointers to NUL-terminated UTF-16
-     strings — verified against the decompiled parser in `Enscape.WindowAPI.dll`), and
-   * the call to be made on the windowing thread.
-5. **Coordinate map**: Revit feet (X-east, Y-north, Z-up) → engine meters
-   (X-east, Y-up, Z-south): `(x, y, z) → (x, z, −y) · 0.3048` (`EngineSpace`).
-   Camera quaternions follow the GLM right-handed lookAt basis
-   `[right = cross(f,u), up, −forward]` (validated with a top-down calibration camera).
-6. **Fov**: `CameraParams.fov` is horizontal degrees with `fovType=HORIZONTAL`.
-7. **Startup sequence** (mirrors Chaos' host):
-   `Enscape_InitializeLogging` → `EnscapeEmbeddedWindow_StartRenderer2` →
-   await `OnInitialized` callback → `EnscapeInstance.AttachToExistingInstance` →
-   `BeginApiScope` → world/camera/sun/capture APIs.
-8. **World update**: `UpdateWorld(callback)` is asynchronous — the world becomes visible
-   only when the completion callback fires (return code 0).
+1. **Units**: pushed geometry is consumed **1:1 in meters**. Enscape's Revit plugin converts
+   Revit feet → meters and applies the axis rotation once at the world root
+   (`WorldTransformation = Scale(0.3048) · WorldRotation`, `WorldRotation = [X, −Z, Y]`).
+   PowerPotion applies the same conversion per vertex/instance (`EngineSpace`). A 1 m cube
+   with the camera 10 m away renders at the expected size — no calibration factor is needed.
+2. **Camera**: `CameraParams.fov` is in **radians** (the shipped host calls
+   `camera.SetFov(fieldOfView.Radians, type)`); `FovType.HORIZONTAL` maps to Revit's
+   `ViewOrientation`/camera info. Position/orientation are in meters with the same
+   world rotation; the camera basis is `[right, up, −forward]`.
+3. **World push**: `UpdateWorld(callback)` is asynchronous; the frame appears when the
+   callback returns 0. Push it from the UI thread and do not block waiting for completion.
+4. **Window embedding** (this is why a naive HwndHost shows a second window):
+   `EnscapeEmbeddedWindow_StartRenderer2` is started with the **top-level** window handle and
+   the renderer placeholder's **screen rectangle**; the engine creates its own window there.
+   The host then re-styles it (`WS_POPUP` → `WS_CHILD`, Enscape's `ToggleChildWindowStyle`),
+   reparents it into its visual tree (`RendererControl : NativeControlHost`) and resizes it.
+   PowerPotion mirrors this with `SetParent` + `SetWindowPos` inside `RendererSurface`.
+5. **Init parameters**: Chaos' host leaves `WorkingDirectory` and `BaseDirectoryWriteable`
+   **null** (the engine derives them from its module location — `Renderer\Bin64` → `Renderer`
+   for `systemPre.cfg`, roaming app-data for caches). Setting them to custom paths makes the
+   engine miss `systemPre.cfg`; PowerPotion leaves them null as well.
+6. **Host application**: the Revit host reports `HostApplication.REVIT`; pre-init commands are
+   `g_displayLoadingScreen 0`, `g_trial`, `g_locale`, plus `r_hwrt`/`r_dlss` (these two are only
+   accepted **before** initialization).
+7. **Scene export**: Revit delivers instance geometry in the symbol's local coordinates; every
+   nested instance/link transform must be composed to world space. Facets keep Revit's
+   outward CCW winding (the feet→meters/axis conversion is a proper rotation). PowerPotion
+   flattens geometry to world space and pushes identity instance matrices.
+8. **Callback threads**: engine callbacks (log/initialized) arrive on native threads. Touching
+   WPF objects from them raises `InvalidOperationException` inside the engine's SEH handler,
+   which aborts the process — every callback must marshal to the dispatcher.
+9. **Live updates**: Revit's `DocumentChanged` is raised inside the transaction; the exporter must
+   not run there. PowerPotion only sets a dirty flag and exports from `Idling` (debounced 400 ms),
+   with `IdlingEventArgs.SetRaiseWithoutDelay()` keeping the loop hot. In the host, socket messages
+   are dispatched asynchronously and camera updates are coalesced (latest wins) so a slow scene
+   push cannot replay stale camera frames.
 
-These constants and behaviors live in `EngineBridge` (host) and `EngineSpace` (plugin)
-and are the only places that would need adjustment for a different Enscape build.
+## Canvas, environment and free navigation
+
+* **Sky**: the engine's procedural Enscape sky is used (`HorizonSource.None` — no skybox file,
+  `r_skyBoxFromFile 0`). Sun/date/location come from the Revit view (`SunParser` → `SetProjectLocation`
+  / `SetDateAndTime`), so the sky, clouds and lighting match the Revit model's real time-of-day.
+* **Ground / base**: the engine's infinite ground plane is the base the model sits on. Enscape's
+  horizon textures (`RendererHost\Data\Horizons\*.ktx2`, including `whiteGround.ktx2`) are deployed
+  into the engine's writable data directory at host start (mirroring Enscape's
+  `RendererResourcesUpdater`), which removes the "Texture loading - does not exist" warning and gives
+  the ground its proper look.
+* **Free navigation** (`NavigationController`, 60 Hz):
+  * **Fly** — `W/A/S/D` move, `Q/E` down/up, hold **right mouse** to look, wheel dollies, `Shift` fast,
+    `Ctrl` slow.
+  * **Walk** — `W/A/S/D` + look, wheel walks forward/back; eye height is clamped (1.7 m), `Q/E` disabled.
+  * Keyboard is polled (`GetAsyncKeyState`); right-button look and the wheel are captured by a
+    low-level mouse hook and swallowed **only while the cursor is over the render surface**, so the
+    engine cannot apply a competing navigation step and the settings sidebar still scrolls normally.
+  * The first interaction inside the renderer detaches from the Revit camera (Enscape's live-camera
+    behaviour); the toolbar's **Follow Revit** button re-attaches at the latest Revit view. The
+    **Fly/Walk** button switches modes (`sp_fly` is forwarded to the engine as well).
+* `pp_nav` console commands (`mode`, `follow`, `look`, `move`, `teleport`, `fov`, `focus`) exist for
+  automated testing of the camera path (used by `tests/PowerPotion.SmokeTest`, including a
+  `--real-input` mode that injects real `W`/right-drag/wheel events with `SendInput`).
 
 ## Legal / ethical scope
 

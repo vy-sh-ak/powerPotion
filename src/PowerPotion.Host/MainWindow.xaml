@@ -22,6 +22,10 @@
                            VerticalAlignment="Center" Margin="10,0,0,0" TextTrimming="CharacterEllipsis" Text=""/>
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="BtnLive" Content="⏸ Pause Updates" Click="OnToggleLive" Padding="10,4" Margin="0,0,6,0"/>
+                    <Button x:Name="BtnNavMode" Content="🛫 Fly" Click="OnToggleNavMode" Padding="10,4" Margin="0,0,6,0"
+                            ToolTip="Toggle walk / fly navigation"/>
+                    <Button x:Name="BtnFollow" Content="🔗 Follow Revit: on" Click="OnToggleFollow" Padding="10,4" Margin="0,0,6,0"
+                            ToolTip="Re-attach the camera to the Revit view"/>
                     <Button Content="📷 Screenshot" Click="OnScreenshot" Padding="10,4" Margin="0,0,6,0"/>
                     <Button Content="🌐 Panorama" Click="OnPanorama" Padding="10,4" Margin="0,0,6,0"/>
                     <Button x:Name="BtnSettings" Content="🎛 Visual Settings" Click="OnToggleSettings" Padding="10,4" Margin="0,0,6,0"/>

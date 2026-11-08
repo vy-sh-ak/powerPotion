@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using PowerPotion.Host.Enscape;
 using PowerPotion.Host.Net;
 using PowerPotion.Protocol;
@@ -19,6 +20,75 @@ public partial class MainWindow : Window
     private MaterialDto? _selectedMaterial;
     private bool _sidebarIsMaterials;
     private bool _suppressPanelEvents;
+    private bool _engineReady;
+    private readonly bool _connectedToRevit;
+    private WorldSnapshot? _pendingWorld;
+    private readonly NavigationController _nav;
+
+    private void OnNavigationCommand(ConsoleCommand cmd)
+    {
+        var parts = (cmd.Command ?? "").Trim().Split(' ');
+        if (parts.Length == 0 || parts[0] != "pp_nav") { _engine.ExecuteConsoleCommand(cmd.Command ?? "", cmd.Deferred); return; }
+        try
+        {
+            switch (parts.Length > 1 ? parts[1] : "")
+            {
+                case "mode" when parts.Length > 2:
+                    _nav.SetMode(parts[2] == "walk" ? NavigationController.NavigationMode.Walk : NavigationController.NavigationMode.Fly);
+                    break;
+                case "follow" when parts.Length > 2:
+                    _nav.SetFollowRevit(parts[2] is "on" or "1" or "true");
+                    break;
+                case "look" when parts.Length > 3:
+                    _nav.Look(float.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture),
+                              float.Parse(parts[3], System.Globalization.CultureInfo.InvariantCulture));
+                    break;
+                case "move" when parts.Length > 4:
+                    _nav.Move(float.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture),
+                              float.Parse(parts[3], System.Globalization.CultureInfo.InvariantCulture),
+                              float.Parse(parts[4], System.Globalization.CultureInfo.InvariantCulture));
+                    break;
+                case "teleport" when parts.Length > 4:
+                    _nav.Teleport(float.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture),
+                                  float.Parse(parts[3], System.Globalization.CultureInfo.InvariantCulture),
+                                  float.Parse(parts[4], System.Globalization.CultureInfo.InvariantCulture));
+                    break;
+                case "fov" when parts.Length > 2:
+                    _nav.SetFov(float.Parse(parts[2], System.Globalization.CultureInfo.InvariantCulture));
+                    break;
+                case "focus":
+                    _engine.FocusRenderWindow();
+                    break;
+                default:
+                    HostLog.Write("pp_nav: unknown command '" + cmd.Command + "'");
+                    break;
+            }
+            HostLog.Write("pp_nav: " + cmd.Command);
+            var p = _nav.Pose;
+            HostLog.Write(string.Format(System.Globalization.CultureInfo.InvariantCulture,
+                "pp_nav pose mode={0} follow={1} x={2:0.###} y={3:0.###} z={4:0.###} yaw={5:0.##} pitch={6:0.##}",
+                _nav.Mode, _nav.FollowRevit, p.X, p.Y, p.Z, p.Yaw, p.Pitch));
+        }
+        catch (Exception ex) { HostLog.Exception("pp_nav", ex); }
+    }
+
+    private void UpdateNavigationUi()
+    {
+        BtnNavMode.Content = _nav.Mode == NavigationController.NavigationMode.Walk ? "🚶 Walk" : "🛫 Fly";
+        BtnFollow.Content = _nav.FollowRevit ? "🔗 Follow Revit: on" : "🔗 Follow Revit: off";
+        HostLog.Write($"nav ui: follow={_nav.FollowRevit} mode={_nav.Mode}");
+        SetStatus(_nav.FollowRevit
+            ? "Following the Revit view."
+            : $"Free look ({_nav.Mode}) — W/A/S/D, RMB look, wheel, Shift/Ctrl; Q/E in fly mode.");
+    }
+
+    private void OnToggleNavMode(object sender, RoutedEventArgs e) =>
+        _nav.SetMode(_nav.Mode == NavigationController.NavigationMode.Walk
+            ? NavigationController.NavigationMode.Fly
+            : NavigationController.NavigationMode.Walk);
+
+    private void OnToggleFollow(object sender, RoutedEventArgs e) =>
+        _nav.SetFollowRevit(!_nav.FollowRevit);
 
     private readonly string _captureDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "PowerPotion");
@@ -28,49 +98,93 @@ public partial class MainWindow : Window
         _engine = engine;
         _settings = settings;
         _connection = connection;
+        _connectedToRevit = connection != null;
         Directory.CreateDirectory(_captureDir);
 
         InitializeComponent();
         Title = "PowerPotion — Live Renderer";
 
-        _engine.Log += m => Dispatcher.Invoke(() => SetStatus(m));
-        _engine.ClosedFromEngine += () => Dispatcher.Invoke(OnEngineClosed);
+        _nav = new NavigationController(_engine);
+        _nav.FollowChanged += UpdateNavigationUi;
+        _nav.ModeChanged += UpdateNavigationUi;
+
+        _engine.Log += m =>
+        {
+            HostLog.Write("engine: " + m);
+            if (Dispatcher.CheckAccess()) SetStatus(m);
+            else Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(() => SetStatus(m)));
+        };
+        _engine.ClosedFromEngine += () =>
+        {
+            HostLog.Write("Engine closed from engine callback");
+            Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(OnEngineClosed));
+        };
         _engine.CaptureFinished += ok => Dispatcher.Invoke(() => SetStatus(ok ? "Capture saved." : "Capture failed."));
 
         if (_connection != null)
         {
             _connection.Log += m => Dispatcher.Invoke(() => SetStatus(m));
             _connection.WorldReceived += world => Dispatcher.Invoke(() => OnWorld(world));
-            _connection.CameraReceived += cam => Dispatcher.Invoke(() => _engine.ApplyCamera(cam));
+            _connection.CameraReceived += cam => _nav.OnRevitCamera(cam);
             _connection.SunReceived += sun => Dispatcher.Invoke(() => _engine.ApplySun(sun));
-            _connection.CommandReceived += cmd => Dispatcher.Invoke(() =>
-                _engine.ExecuteConsoleCommand(cmd.Command, cmd.Deferred));
+            _connection.CommandReceived += OnNavigationCommand;
             _connection.CaptureReceived += req => Dispatcher.Invoke(() => OnCaptureRequest(req));
             _connection.MaterialReceived += mat => Dispatcher.Invoke(() =>
             {
                 _engine.ExecuteConsoleCommand("echo material", false);
             });
-            _connection.ViewActivationReceived += view => Dispatcher.Invoke(() =>
+            _connection.ViewActivationReceived += view =>
             {
-                _engine.ApplyCamera(view.Camera);
+                _nav.OnRevitCamera(view.Camera);
                 _engine.ApplySun(view.Sun);
                 SetStatus($"View: {view.Name}");
-            });
+            };
             _connection.Disconnected += () => Dispatcher.Invoke(() =>
             {
                 SetStatus("Disconnected from Revit.");
                 _connection = null;
+                // The renderer host is a child of the Revit session: do not leave an orphan window
+                // behind when Revit closes/crashes (Enscape's host behaves the same way).
+                if (_connectedToRevit) Close();
             });
         }
 
         EngineText.Text = "engine " + _engine.EngineVersion;
 
+        // r_hwrt/r_dlss are only accepted before the engine is initialized.
+        foreach (var cmd in _settings.ToPreInitCommands())
+            _engine.PreInitCommands.Add(cmd);
+
         // Build the renderer surface once loaded.
         Loaded += (_, _) =>
         {
             if (_surface != null) return;
+            HostLog.Write("MainWindow.Loaded → creating RendererSurface");
             _surface = new RendererSurface(_engine, () => DocLabel.Text);
             _surface.Log += m => SetStatus(m);
+            _surface.EngineReady += () =>
+            {
+                HostLog.Write("RendererSurface.EngineReady → applying visual settings");
+                _engineReady = true;
+                _nav.SetRenderWindow(_engine.NativeWindowHandle);
+                _nav.Enabled = true;
+                SetStatus("Renderer ready.");
+                ApplySettings();
+                _nav.ApplyModeToEngine();
+                UpdateNavigationUi();
+                _ = _connection?.SendEngineReadyAsync(true, "");
+                if (_pendingWorld != null)
+                {
+                    var world = _pendingWorld;
+                    _pendingWorld = null;
+                    OnWorld(world);
+                }
+            };
+            _surface.EngineFailed += ex =>
+            {
+                HostLog.Exception("RendererSurface.EngineFailed", ex);
+                _ = _connection?.SendEngineReadyAsync(false, ex.Message);
+            };
             SurfaceHost.Children.Add(_surface);
         };
 
@@ -81,8 +195,30 @@ public partial class MainWindow : Window
 
     private void OnWorld(WorldSnapshot world)
     {
+        if (!_engineReady)
+        {
+            // Revit exports and sends the scene immediately after connecting; the native engine
+            // takes several seconds to come up. Keep the latest snapshot until it is ready.
+            _pendingWorld = world;
+            SetStatus($"Scene received ({world.Models.Count} models) — waiting for renderer…");
+            HostLog.Write($"OnWorld queued: {world.Models.Count} models, {world.Instances.Count} instances, " +
+                          $"{world.Materials.Count} materials, {world.Lights.Count} lights");
+            return;
+        }
+
         SetStatus($"Received world '{world.ViewName}' — {world.Models.Count} models, {world.Materials.Count} materials, {world.Lights.Count} lights. Updating…");
-        _engine.ApplyWorld(world);
+        HostLog.Write($"OnWorld apply: {world.Models.Count} models, {world.Instances.Count} instances, " +
+                      $"{world.Materials.Count} materials, {world.Lights.Count} lights");
+        try
+        {
+            _engine.ApplyWorld(world);
+        }
+        catch (Exception ex)
+        {
+            HostLog.Exception("ApplyWorld", ex);
+            SetStatus("Renderer rejected the scene — see logs.");
+            return;
+        }
         _materials.Clear();
         _materials.AddRange(world.Materials);
         if (_sidebarIsMaterials) BuildMaterialsPanel();
@@ -463,6 +599,7 @@ public partial class MainWindow : Window
     {
         try
         {
+            _nav.Dispose();
             _connection?.Dispose();
             _engine.Dispose();
         }

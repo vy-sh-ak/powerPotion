@@ -27,6 +27,7 @@ public sealed class PowerPotionApp : IExternalApplication
         try
         {
             CreateRibbon(application);
+
             return Result.Succeeded;
         }
         catch (Exception ex)
@@ -49,10 +50,31 @@ public sealed class PowerPotionApp : IExternalApplication
             _sync?.Dispose();
             var hostExe = HostExePath();
             var sync = new LiveSyncService(uiApp, hostExe, PluginDir);
-            sync.Log += m => System.Diagnostics.Debug.WriteLine("[PowerPotion] " + m);
+            sync.Log += m =>
+            {
+                System.Diagnostics.Debug.WriteLine("[PowerPotion] " + m);
+                LogToFile(m);
+            };
             _sync = sync;
         }
         return _sync;
+    }
+
+    private static readonly object LogGate = new();
+
+    /// <summary>Realtime diagnostics next to the renderer-host logs (used to diagnose live sessions).</summary>
+    private static void LogToFile(string message)
+    {
+        try
+        {
+            var dir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "PowerPotion", "Logs");
+            Directory.CreateDirectory(dir);
+            var line = $"{DateTime.Now:HH:mm:ss.fff} [revit] {message}{Environment.NewLine}";
+            lock (LogGate) File.AppendAllText(Path.Combine(dir, "revit-sync.log"), line);
+        }
+        catch { }
     }
 
     // ------------------------------------------------------------------

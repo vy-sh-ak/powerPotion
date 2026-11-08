@@ -38,7 +38,10 @@ public sealed class LiveSyncService : IDisposable
     private bool _running;
     private DateTime _lastExport = DateTime.MinValue;
     private volatile bool _reexportQueued;
+    private volatile bool _hostConnected;
+    private bool _initialWorldSent;
     private DateTime _lastCameraPush = DateTime.MinValue;
+    private readonly SemaphoreSlim _sendGate = new(1, 1);
 
     public bool IsRunning => _running;
     public event Action<string>? Log;
@@ -87,13 +90,15 @@ public sealed class LiveSyncService : IDisposable
         _running = true;
         LogLine($"Live sync started on port {port} (view: {_view.Name}).");
 
-        // export + send the first world once the host connects
+        // The initial export MUST run inside a Revit API context (CustomExporter is not
+        // thread-safe and cannot be called from a worker thread); OnIdling performs it as soon
+        // as the host has connected.
         _ = Task.Run(async () =>
         {
             try
             {
                 await WaitForClientAsync();
-                ExportAndSendWorld(fullExport: true);
+                _hostConnected = true;
             }
             catch (Exception ex) { LogLine("start: " + ex.Message); }
         });
@@ -103,6 +108,8 @@ public sealed class LiveSyncService : IDisposable
     {
         if (!_running) return;
         _running = false;
+        _hostConnected = false;
+        _initialWorldSent = false;
         UnhookEvents();
 
         try { _ = SendAsync(MessageType.LiveUpdateState, w => w.Write(true)); } catch { }
@@ -252,6 +259,9 @@ public sealed class LiveSyncService : IDisposable
     {
         var stream = _stream;
         if (stream == null) return;
+        // Frames are written as one buffer; concurrent writers would interleave and corrupt
+        // the framing (camera updates at ~30 Hz + multi-MB world snapshots).
+        await _sendGate.WaitAsync();
         try
         {
             await MessageCodec.SendAsync(stream, type, body);
@@ -259,6 +269,10 @@ public sealed class LiveSyncService : IDisposable
         catch (Exception ex)
         {
             LogLine("send: " + ex.Message);
+        }
+        finally
+        {
+            _sendGate.Release();
         }
     }
 
@@ -294,17 +308,28 @@ public sealed class LiveSyncService : IDisposable
     {
         if (!_running || _liveUpdatesPaused) return;
         if (e.GetDocument() != _document) return;
-        if (DateTime.UtcNow - _lastExport < TimeSpan.FromMilliseconds(400))
-        {
-            _reexportQueued = true;
-            return;
-        }
-        ExportAndSendWorld(fullExport: true);
+
+        // DocumentChanged is raised inside the transaction/commit path: do not run CustomExporter
+        // here. Enscape defers scene work to a safe API context; we queue it and export from Idling.
+        _reexportQueued = true;
     }
 
     private void OnIdling(object? sender, Autodesk.Revit.UI.Events.IdlingEventArgs e)
     {
         if (!_running) return;
+
+        // Keep the idle loop hot: Revit otherwise raises Idling only sporadically once the
+        // renderer window has focus, which freezes camera streaming and live model updates.
+        try { e.SetRaiseWithoutDelay(); } catch { }
+
+        // First scene: sent from the Revit API context once the host has connected.
+        if (!_initialWorldSent && _hostConnected)
+        {
+            _initialWorldSent = true;
+            ExportAndSendWorld(fullExport: true);
+            PushCamera();
+            return;
+        }
 
         if (_reexportQueued && !_liveUpdatesPaused && DateTime.UtcNow - _lastExport >= TimeSpan.FromMilliseconds(400))
         {
@@ -356,10 +381,24 @@ public sealed class LiveSyncService : IDisposable
 
     private async Task SendWorldAsync(WorldSnapshot world)
     {
-        await MessageCodec.SendAsync(_stream!, MessageType.WorldSnapshot, w => MessageCodec.WriteWorld(w, world));
-        // sun lives in the world message; also push the camera right after
-        await MessageCodec.SendAsync(_stream!, MessageType.CameraUpdate, w => MessageCodec.WriteCamera(w, world.Camera));
-        LogLine("World sent.");
+        var stream = _stream;
+        if (stream == null) return;
+        await _sendGate.WaitAsync();
+        try
+        {
+            await MessageCodec.SendAsync(stream, MessageType.WorldSnapshot, w => MessageCodec.WriteWorld(w, world));
+            // sun lives in the world message; also push the camera right after
+            await MessageCodec.SendAsync(stream, MessageType.CameraUpdate, w => MessageCodec.WriteCamera(w, world.Camera));
+            LogLine("World sent.");
+        }
+        catch (Exception ex)
+        {
+            LogLine("send world: " + ex.Message);
+        }
+        finally
+        {
+            _sendGate.Release();
+        }
     }
 
     private void PushCamera()
