@@ -1,6 +1,12 @@
 # PowerPotion — Architecture & Reverse-Engineering Notes
 
-PowerPotion is a clean-room, personalized re-implementation of the **Chaos Enscape 4.7.0.57 Revit plugin**,
+> **Naming note:** the third-party rendering engine PowerPotion loads at runtime is referred
+> to as **"Upstream"** throughout the docs, and its vendor as **"the vendor"**. Identifiers
+> prefixed `Upstream` (`Upstream.RendererApi.dll`, `UpstreamInstance`, `Upstream_*`, …) are the
+> anonymized names of the corresponding managed types / native exports of the engine product
+> installed under `C:\Program Files\Enscape\RendererHost`.
+
+PowerPotion is a clean-room, personalized re-implementation of the **Upstream 4.7.0.57 Revit plugin**,
 built from static evidence gathered with the REA reverse-engineering toolkit on the installed product
 (`C:\Program Files\Enscape`). It keeps the rendering functionality (real-time render, materials, lights,
 sun/cloud/sky), removes VR and authentication/licensing, and adds its own installer/uninstaller.
@@ -9,26 +15,26 @@ sun/cloud/sky), removes VR and authentication/licensing, and adds its own instal
 
 | Area | Evidence |
 |---|---|
-| Revit plugin structure (`Enscape.Revit.Plugin.2026.dll`) | REA managed-members evidence `ev_5d78d938…` (463 types / 2102 methods / 587 strings) — see `rea-report-revit-plugin.md` |
-| IPC layer (`Enscape.Cad.Remote.dll`) | REA evidence `ev_89e328cd…` — custom binary RPC over a localhost TCP socket, `--port` argument |
-| Renderer host (`Enscape.RendererHost.dll`) | REA evidence `ev_d41427bf…` (614 types) — see `rea-report-rendererhost.md` |
-| Native renderer API (`Enscape.RendererApi.dll`, P/Invoke over `Enscape.Renderer.dll`) | REA native-boundary evidence `ev_7464e9e6…` (186 imports) + full reflection surface dump (`rendererapi-surface*.txt`) |
-| Native engine exports | 213 `Enscape_*` C exports in `Renderer\Bin64\Enscape.Renderer.dll` + 8 `EnscapeEmbeddedWindow_*` in `Enscape.WindowApi.dll` |
+| Revit plugin structure (`Upstream.Revit.Plugin.2026.dll`) | REA managed-members evidence `ev_5d78d938…` (463 types / 2102 methods / 587 strings) — see `rea-report-revit-plugin.md` |
+| IPC layer (`Upstream.Cad.Remote.dll`) | REA evidence `ev_89e328cd…` — custom binary RPC over a localhost TCP socket, `--port` argument |
+| Renderer host (`Upstream.RendererHost.dll`) | REA evidence `ev_d41427bf…` (614 types) — see `rea-report-rendererhost.md` |
+| Native renderer API (`Upstream.RendererApi.dll`, P/Invoke over `Upstream.Renderer.dll`) | REA native-boundary evidence `ev_7464e9e6…` (186 imports) + full reflection surface dump (`rendererapi-surface*.txt`) |
+| Native engine exports | 213 `Upstream_*` C exports in `Renderer\Bin64\Upstream.Renderer.dll` + 8 `UpstreamEmbeddedWindow_*` in `Upstream.WindowApi.dll` |
 
-### Enscape's architecture (observed)
+### the vendor's architecture (observed)
 
 ```
 Revit (Revit.exe, .NET 8)
- ├─ Enscape.Revit.Plugin.2026.dll          managed add-in (ribbon UI, scene export, live sync)
+ ├─ Upstream.Revit.Plugin.2026.dll          managed add-in (ribbon UI, scene export, live sync)
  │   ├─ RenderingSync: CustomExporter/IExportContext → ExportedWorld → FlatWorld deltas
  │   ├─ Materials: 19 Revit appearance schemas parsed (generic_diffuse, …) + ExtensibleStorage overrides
  │   ├─ Lights: "Generic Photometric Light" asset (IES, temperature, intensity units)
  │   └─ Sun: SunAndShadowSettings → PlaceAndTime / Explicit sun vector
- ├─ Enscape.Cad.Remote.dll                 RemoteCadServer: TCP loopback listener, custom binary protocol
- └─ launches → RendererHost\Enscape.RendererHost.exe --port <n>  (Avalonia UI host)
-      ├─ Enscape.License.* / Chaos account  ← license + auth gates (REMOVED in PowerPotion)
+ ├─ Upstream.Cad.Remote.dll                 RemoteCadServer: TCP loopback listener, custom binary protocol
+ └─ launches → RendererHost\Upstream.RendererHost.exe --port <n>  (Avalonia UI host)
+      ├─ Upstream.License.* / the vendor account  ← license + auth gates (REMOVED in PowerPotion)
       ├─ en2vr / vr_* CVars, HmdType        ← VR support (REMOVED in PowerPotion)
-      └─ Enscape.RendererApi.dll → Enscape.Renderer.dll (native Vulkan engine, DLSS/FSR)
+      └─ Upstream.RendererApi.dll → Upstream.Renderer.dll (native Vulkan engine, DLSS/FSR)
 ```
 
 Key facts that shaped PowerPotion's design:
@@ -36,22 +42,22 @@ Key facts that shaped PowerPotion's design:
 1. **The renderer engine has no license API.** All licensing in the shipped product lives in the *managed*
    host (`RendererWindow.PerformLicenseCheckAsync`, `CommandState.VerifyLicense`,
    `ScreenshotExecutor.ThrowIfNotAvailable`, `PreInitCommandsCollector` pushing `g_trial`). The native
-   `Enscape.Renderer.dll` exports 213 C functions, none license-related. A host that simply never calls the
-   license layer gets full engine functionality. (The engine remains the user's licensed Enscape
+   `Upstream.Renderer.dll` exports 213 C functions, none license-related. A host that simply never calls the
+   license layer gets full engine functionality. (The engine remains the user's licensed Upstream
    installation — PowerPotion does not patch or circumvent anything inside it.)
-2. **The engine is embedded via `EnscapeEmbeddedWindow_StartRenderer2`** (from `Enscape.WindowApi.dll`),
+2. **The engine is embedded via `UpstreamEmbeddedWindow_StartRenderer2`** (from `Upstream.WindowApi.dll`),
    which takes the host's top-level HWND + the renderer placeholder's screen rectangle, an init-params
    struct (working dir, pre-init console commands), and callbacks. The engine creates its own window at
    that rectangle; the host re-styles it as a child and reparents it into its visual tree.
 3. **Everything (geometry, materials, lights, sun, camera) is pushed through 24 API scopes** obtained via
-   `EnscapeInstance.BeginApiScope()` (`IEnscapeApiScope.TryGetWorldApi/CaptureApi/SettingsApi/…`).
+   `UpstreamInstance.BeginApiScope()` (`IUpstreamApiScope.TryGetWorldApi/CaptureApi/SettingsApi/…`).
 4. **Settings are console-command (CVar) strings** (`r_skyboxFile`, `r_cloudDensity`, `r_fog`,
    `g_SunPower`, `r_hwrt`, `sys_spec`, `r_dlss`, …). The full CVar list is in
    `rea-report-rendererhost.md` §2.
 5. **Geometry format**: `ModelGeometryParams` = raw vertex/normal/UV/index buffers + `MaterialIndexGroup`
    ranges; helpers `ModelGeometryParams.Allocate(ModelData, out Action cleanup)` and
    `ModelInstanceParams.FromMatrix(mat4)` exist in the shipped managed wrapper and are used by PowerPotion.
-6. **Enscape's coordinate convention** (derived from the plugin's `RevitGeometryParser.WorldTransformation`,
+6. **the vendor's coordinate convention** (derived from the plugin's `RevitGeometryParser.WorldTransformation`,
    camera math, and sun vector code): engine space is **meters, right-handed, Y-up**, Revit
    (X,Y,Z) ft → engine (X, Z, −Y) m. North = −Z engine. Camera forward = −Z (OpenGL style).
 
@@ -64,7 +70,7 @@ Revit 2026
       ├─ Sync: DocumentObserver (DocumentChanged → debounced re-export),
       │        CameraSynchronizer (Idling → engine-space camera), HostLauncher
       └─ PowerPotion.Protocol ←→ TCP loopback ←→ PowerPotion.Host.exe --port <n>  (WPF)
-           ├─ Enscape/EngineBridge — loads installed Enscape.RendererApi.dll + native engine
+           ├─ Upstream/EngineBridge — loads installed Upstream.RendererApi.dll + native engine
            │   (no license calls, no VR, no accounts, no telemetry)
            ├─ MainWindow: HwndHost embedding + WPF toolbar (visual settings, sky/cloud/sun, quality, capture)
            └─ Panels: MaterialEditor, VisualSettings, SkySettings, SunSettings, CaptureSettings
@@ -74,10 +80,10 @@ Both processes exchange `PowerPotion.Protocol` messages (length-prefixed little-
 
 ## Engine behavior verified against the shipped host (4.7.0.57)
 
-Facts re-established from the decompiled `Enscape.RendererHost.dll`/`Enscape.RendererApi.dll`,
+Facts re-established from the decompiled `Upstream.RendererHost.dll`/`Upstream.RendererApi.dll`,
 the decompiled Revit plugin, and controlled renders on the installed engine:
 
-1. **Units**: pushed geometry is consumed **1:1 in meters**. Enscape's Revit plugin converts
+1. **Units**: pushed geometry is consumed **1:1 in meters**. the vendor's Revit plugin converts
    Revit feet → meters and applies the axis rotation once at the world root
    (`WorldTransformation = Scale(0.3048) · WorldRotation`, `WorldRotation = [X, −Z, Y]`).
    PowerPotion applies the same conversion per vertex/instance (`EngineSpace`). A 1 m cube
@@ -89,12 +95,12 @@ the decompiled Revit plugin, and controlled renders on the installed engine:
 3. **World push**: `UpdateWorld(callback)` is asynchronous; the frame appears when the
    callback returns 0. Push it from the UI thread and do not block waiting for completion.
 4. **Window embedding** (this is why a naive HwndHost shows a second window):
-   `EnscapeEmbeddedWindow_StartRenderer2` is started with the **top-level** window handle and
+   `UpstreamEmbeddedWindow_StartRenderer2` is started with the **top-level** window handle and
    the renderer placeholder's **screen rectangle**; the engine creates its own window there.
-   The host then re-styles it (`WS_POPUP` → `WS_CHILD`, Enscape's `ToggleChildWindowStyle`),
+   The host then re-styles it (`WS_POPUP` → `WS_CHILD`, the vendor's `ToggleChildWindowStyle`),
    reparents it into its visual tree (`RendererControl : NativeControlHost`) and resizes it.
    PowerPotion mirrors this with `SetParent` + `SetWindowPos` inside `RendererSurface`.
-5. **Init parameters**: Chaos' host leaves `WorkingDirectory` and `BaseDirectoryWriteable`
+5. **Init parameters**: the vendor's host leaves `WorkingDirectory` and `BaseDirectoryWriteable`
    **null** (the engine derives them from its module location — `Renderer\Bin64` → `Renderer`
    for `systemPre.cfg`, roaming app-data for caches). Setting them to custom paths makes the
    engine miss `systemPre.cfg`; PowerPotion leaves them null as well.
@@ -116,12 +122,12 @@ the decompiled Revit plugin, and controlled renders on the installed engine:
 
 ## Canvas, environment and free navigation
 
-* **Sky**: the engine's procedural Enscape sky is used (`HorizonSource.None` — no skybox file,
+* **Sky**: the engine's procedural Upstream sky is used (`HorizonSource.None` — no skybox file,
   `r_skyBoxFromFile 0`). Sun/date/location come from the Revit view (`SunParser` → `SetProjectLocation`
   / `SetDateAndTime`), so the sky, clouds and lighting match the Revit model's real time-of-day.
-* **Ground / base**: the engine's infinite ground plane is the base the model sits on. Enscape's
+* **Ground / base**: the engine's infinite ground plane is the base the model sits on. the vendor's
   horizon textures (`RendererHost\Data\Horizons\*.ktx2`, including `whiteGround.ktx2`) are deployed
-  into the engine's writable data directory at host start (mirroring Enscape's
+  into the engine's writable data directory at host start (mirroring the vendor's
   `RendererResourcesUpdater`), which removes the "Texture loading - does not exist" warning and gives
   the ground its proper look.
 * **Free navigation** (`NavigationController`, 60 Hz):
@@ -132,7 +138,7 @@ the decompiled Revit plugin, and controlled renders on the installed engine:
     a low-level mouse hook and swallowed **only while the cursor is over the render surface**, so the
     engine cannot apply a competing navigation step and the settings sidebar still scrolls normally.
     Button-down is passed through (never swallowed) so the first click also activates the window.
-  * The first interaction inside the renderer detaches from the Revit camera (Enscape's live-camera
+  * The first interaction inside the renderer detaches from the Revit camera (the vendor's live-camera
     behaviour); the toolbar's **Follow Revit** button re-attaches at the latest Revit view. The
     **Fly/Walk** button switches modes (`sp_fly` is forwarded to the engine as well).
 * `pp_nav` console commands (`mode`, `follow`, `look`, `move`, `teleport`, `fov`, `focus`) exist for
@@ -143,7 +149,7 @@ the decompiled Revit plugin, and controlled renders on the installed engine:
 
 Revit appearance assets use one schema per material family; the diffuse/albedo bitmap is connected
 to the **schema's albedo property**, not always to `generic_diffuse`. `RevitMaterialParser` maps each
-observed schema to its albedo property using the literals from Enscape's `MaterialParser`
+observed schema to its albedo property using the literals from the vendor's `MaterialParser`
 (REA Evidence `ev_21cf950919b02dbddc9127eb00780815fce66e449b13fc0ebab82738322e1de4`; parent
 `ev_d6e7aea05573553a7661e2433e87523a3cf608160e6a25fd0e2b40e6f65bf1e9`):
 
@@ -156,7 +162,7 @@ observed schema to its albedo property using the literals from Enscape's `Materi
 | `PlasticVinylSchema` / `StoneSchema` / `WallPaintSchema` / `GlazingSchema` | `plasticvinyl_color` / `stone_color` / `wallpaint_color` / `glazing_transmittance_color` |
 | `PrismOpaque/Transparent/Layered/Metal/Glazing` | `opaque_albedo` / `transparent_color` / `layered_diffuse` / `metal_f0` / `glazing_transmission_color` |
 
-Textures are read exactly like Enscape's `ParseTexture`: `unifiedbitmap_Bitmap` (connected asset),
+Textures are read exactly like the vendor's `ParseTexture`: `unifiedbitmap_Bitmap` (connected asset),
 `unifiedbitmap_RGBAmount`, `unifiedbitmap_Invert`, and the `texture_*` / `unifiedbitmap_*` scale,
 offset and angle aliases; the angle is degrees → radians. Bitmap paths are resolved with a
 Revit-FileLocator-style search (Revit.ini `MaterialLibraryFiles` / `AdditionalRenderAppearancePaths`,
@@ -186,12 +192,12 @@ The host WPF window uses the same palette (deep violet `#140B22` / `#1E1230`, ac
 
 ## Startup, live sync and navigation hardening
 
-* **No Enscape splash**: the engine window is created far off-screen (`-32000, -32000`) and a
-  watchdog hides every native window of class `Enscape` (top-level *and* child windows — some builds
+* **No Upstream splash**: the engine window is created far off-screen (`-32000, -32000`) and a
+  watchdog hides every native window of class `Upstream` (top-level *and* child windows — some builds
   parent the loading screen to the host). The watchdog stays active with the session, but skips the
   single embedded render window once it is revealed. That reveal happens after the first world commits
   **and a one-second settle delay** (never on "renderer ready"), because until it has a scene the
-  engine paints its own "chaos Enscape Loading …" screen inside that window. The branded splash stays
+  engine paints its own branded "Loading" screen inside that window. The branded splash stays
   on top during the delay and closes when the renderer is revealed.
 * **Responsive splash / no busy cursor**: `SplashPresenter` runs the branded `SplashWindow` on its own
   STA UI thread, and the main window starts off-screen with no taskbar entry. `StartRendererNative`
@@ -204,9 +210,9 @@ The host WPF window uses the same palette (deep violet `#140B22` / `#1E1230`, ac
   "Connecting to Revit…" → "Scene received — starting renderer…" → "Importing scene from Revit…".
   Scene refreshes show a compact "Refreshing from Revit…" spinner in the status bar instead of
   covering the view.
-* **Live sync** (validated against Enscape's shipped plugin with REA Evidence
+* **Live sync** (validated against the vendor's shipped plugin with REA Evidence
   `ev_a52ad799045d27f12640a9449909340f58a8f45fadd8421c54f61d275096b695`):
-  Enscape's `DocumentObserver.OnDocumentChanged` queues a transaction and dispatches it through
+  the vendor's `DocumentObserver.OnDocumentChanged` queues a transaction and dispatches it through
   `RevitCadDispatcher`, which implements `IExternalEventHandler` and owns an `ExternalEvent`.
   PowerPotion does the same (`LiveSyncService.ExportEventHandler`): `DocumentChanged` only marks the
   scene dirty and raises an `ExternalEvent`; the export runs in a valid Revit API context, debounced
@@ -216,7 +222,7 @@ The host WPF window uses the same palette (deep violet `#140B22` / `#1E1230`, ac
 * **Export target is resolved per export** (not cached at Start): the active `UIDocument`/`View3D`
   are read again every time (Revit replaces `Document` objects when a model is reopened); if the
   active document is a family, the open project is used; if the active 3D view is hidden/empty, the
-  document's other 3D views are tried. This mirrors Enscape's
+  document's other 3D views are tried. This mirrors the vendor's
   `GetActiveOrDefault3DViewFromActiveDocument` / `SetActiveViewIfNot3D` / `ResetActiveView`
   (REA Evidence `ev_3ea1e4e9c5caddf615e749c3fa3e1760cf359baf611d92dfc029ed1dd5702c67`).
   Empty worlds are never sent once a scene exists, and the host ignores empty worlds entirely
@@ -241,14 +247,14 @@ The host WPF window uses the same palette (deep violet `#140B22` / `#1E1230`, ac
 
 ## Legal / ethical scope
 
-* PowerPotion **does not modify, patch, or redistribute** any Chaos/Enscape binary. It *uses* the
-  locally-installed, licensed Enscape engine at runtime through its shipped managed API assembly
-  (`Enscape.RendererApi.dll`), the same way the shipped RendererHost does.
-* License/DRM code is **not ported** — the personalized host simply never calls it. Your Enscape
+* PowerPotion **does not modify, patch, or redistribute** any the vendor/Upstream binary. It *uses* the
+  locally-installed, licensed Upstream engine at runtime through its shipped managed API assembly
+  (`Upstream.RendererApi.dll`), the same way the shipped RendererHost does.
+* License/DRM code is **not ported** — the personalized host simply never calls it. Your Upstream
   installation remains licensed and untouched; the engine's own runtime behavior (including any internal
   entitlement enforcement, if present) is preserved as-is.
 * VR, account, telemetry and cloud-upload features are **not implemented**.
-* `docs/rendererapi-surface*.txt` are reference notes of the observed public API surface, not Chaos code.
+* `docs/rendererapi-surface*.txt` are reference notes of the observed public API surface, not the vendor code.
 
 ## References
 

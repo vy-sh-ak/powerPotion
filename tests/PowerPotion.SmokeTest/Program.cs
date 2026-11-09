@@ -95,7 +95,7 @@ public static class Program
         {
             // Real Revit order: the plugin exports only after the host reports EngineReady, so the
             // native window spends several seconds visible-but-empty. Make sure it stays hidden and
-            // does not show its own Enscape splash during that window.
+            // does not show its own vendor splash during that window.
             Console.WriteLine("deferring world #1 until the host signals EngineReady");
             using var readyCts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
             while (true)

@@ -7,17 +7,17 @@ using Enscape.RendererApi.DataModel;
 using GlmSharp;
 using PowerPotion.Protocol;
 
-namespace PowerPotion.Host.Enscape;
+namespace PowerPotion.Host.Engine;
 
 /// <summary>
-/// Bridges the installed Enscape native rendering engine (loaded through its shipped managed API
-/// assembly, exactly like Chaos' own RendererHost does) into a WPF child window.
+/// Bridges the installed native rendering engine (loaded through its shipped managed API
+/// assembly, exactly like the vendor's own RendererHost does) into a WPF child window.
 ///
 /// Contains no license, VR, account or telemetry code — by construction. See docs/ARCHITECTURE.md.
 /// </summary>
 public sealed class EngineBridge : IDisposable
 {
-    private readonly string _enscapeDir;        // .../RendererHost
+    private readonly string _engineDir;        // .../RendererHost
     private readonly string _bin64Dir;          // .../RendererHost/Renderer/Bin64
     private readonly string _dataDir;           // writable engine data dir
     private readonly string _logDir;
@@ -63,41 +63,41 @@ public sealed class EngineBridge : IDisposable
     /// <summary>Console commands passed to the engine before initialization (e.g. r_hwrt, r_dlss).</summary>
     public List<string> PreInitCommands { get; } = new();
 
-    public EngineBridge(string enscapeDir, string dataDir)
+    public EngineBridge(string engineDir, string dataDir)
     {
-        _enscapeDir = enscapeDir;
-        _bin64Dir = Path.Combine(enscapeDir, "Renderer", "Bin64");
+        _engineDir = engineDir;
+        _bin64Dir = Path.Combine(engineDir, "Renderer", "Bin64");
         _logDir = Path.Combine(dataDir, "Logs");
 
         // The engine expects its per-user system data (SystemData\Textures — loading overlay,
         // lens flare, HUD icons — plus shader/pipeline caches) under BaseDirectoryWriteable.
-        // The shipped host uses %APPDATA%\Enscape, where a licensed Enscape installation has
+        // The shipped host uses %APPDATA%\Enscape, where a licensed engine installation has
         // already materialized it. Reuse it when present; otherwise fall back to our own dir
         // (the engine will populate what it can).
-        var appdataEnscape = Path.Combine(
+        var appDataEngine = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Enscape");
-        _dataDir = Directory.Exists(Path.Combine(appdataEnscape, "Data"))
-            ? appdataEnscape
+        _dataDir = Directory.Exists(Path.Combine(appDataEngine, "Data"))
+            ? appDataEngine
             : dataDir;
 
         Directory.CreateDirectory(_dataDir);
         Directory.CreateDirectory(_logDir);
-        DeployRendererResources(appdataEnscape);
+        DeployRendererResources(appDataEngine);
     }
 
     /// <summary>
-    /// Mirrors Enscape's RendererResourcesUpdater: deploy the shipped horizon/ground textures into the
+    /// Mirrors the vendor's RendererResourcesUpdater: deploy the shipped horizon/ground textures into the
     /// engine's writable data directory. Without this the engine logs
     /// "Texture loading - does not exist: …\Data\Textures\Horizons/whiteGround.ktx2" and the ground
     /// plane renders without its texture.
     /// </summary>
-    private void DeployRendererResources(string appDataEnscape)
+    private void DeployRendererResources(string appDataEngine)
     {
         try
         {
-            var source = Path.Combine(_enscapeDir, "Data", "Horizons");
+            var source = Path.Combine(_engineDir, "Data", "Horizons");
             if (!Directory.Exists(source)) return;
-            var target = Path.Combine(appDataEnscape, "Data", "Textures", "Horizons");
+            var target = Path.Combine(appDataEngine, "Data", "Textures", "Horizons");
             Directory.CreateDirectory(target);
             foreach (var file in Directory.EnumerateFiles(source))
             {
@@ -136,11 +136,11 @@ public sealed class EngineBridge : IDisposable
     // ------------------------------------------------------------------
 
     /// <summary>Must run before any Enscape.RendererApi type is touched (call at process start).</summary>
-    public static void InstallAssemblyResolver(string enscapeDir)
+    public static void InstallAssemblyResolver(string engineDir)
     {
         AssemblyLoadContext.Default.Resolving += (ctx, name) =>
         {
-            var candidate = Path.Combine(enscapeDir, name.Name + ".dll");
+            var candidate = Path.Combine(engineDir, name.Name + ".dll");
             return File.Exists(candidate) && (name.Name == "Enscape.RendererApi" || name.Name == "GlmSharpStd")
                 ? ctx.LoadFromAssemblyPath(candidate)
                 : null;
@@ -150,7 +150,7 @@ public sealed class EngineBridge : IDisposable
     private void EnsureApiLoaded()
     {
         if (_apiAssembly != null) return;
-        var apiPath = Path.Combine(_enscapeDir, "Enscape.RendererApi.dll");
+        var apiPath = Path.Combine(_engineDir, "Enscape.RendererApi.dll");
         _apiAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(apiPath);
 
         // Native DllImport resolution: "Enscape.Renderer" / "Enscape.WindowApi" live in Bin64.
@@ -172,7 +172,7 @@ public sealed class EngineBridge : IDisposable
             EngineVersion = sb.ToString().TrimEnd('\0');
         }
         catch { EngineVersion = "unknown"; }
-        LogLine($"Engine API loaded from '{_enscapeDir}' (renderer {EngineVersion}).");
+        LogLine($"Engine API loaded from '{_engineDir}' (renderer {EngineVersion}).");
     }
 
     // ------------------------------------------------------------------
@@ -181,7 +181,7 @@ public sealed class EngineBridge : IDisposable
 
     /// <summary>
     /// Starts the engine rendering into a child of <paramref name="parentHwnd"/>.
-    /// MUST be called from the windowing/UI thread (Chaos' own host guards this with Dispatcher.VerifyAccess).
+    /// MUST be called from the windowing/UI thread (the vendor's original host guards this with Dispatcher.VerifyAccess).
     /// </summary>
     public EnscapeResult StartRendererNative(IntPtr parentHwnd, int x, int y, int width, int height)
     {
@@ -204,10 +204,10 @@ public sealed class EngineBridge : IDisposable
             IsStandalone = false,
             EnableRpc = true,
             EnableVideoPathEditor = false,
-            // Mirrors Enscape's own host for Revit (RendererWindow.StartRendererAsync). The engine's
+            // Mirrors the vendor's own host for Revit (RendererWindow.StartRendererAsync). The engine's
             // units are not affected by this value: the CAD side already sends meters.
             HostApplication = ResolveHostApplication(),
-            // Chaos' own host leaves WorkingDirectory and BaseDirectoryWriteable unset (null): the engine
+            // the vendor's original host leaves WorkingDirectory and BaseDirectoryWriteable unset (null): the engine
             // derives them from its module location (Renderer\Bin64 → Renderer for systemPre.cfg, and the
             // roaming app-data directory for caches/user configs). Setting them to our own paths made the
             // engine miss systemPre.cfg — keep them null exactly like the shipped host.
@@ -216,7 +216,7 @@ public sealed class EngineBridge : IDisposable
         };
 
         // PreInitCommands is a wchar_t** on the native side: an array of `count` pointers, each to a
-        // NUL-terminated UTF-16 string (verified against the decompiled parser in Enscape.WindowAPI.dll).
+        // NUL-terminated UTF-16 string (verified against the decompiled parser in the vendor WindowApi assembly).
         if (!NoPreInit && preInit.Count > 0)
         {
             _preInitCommandPins = new GCHandle[preInit.Count];
@@ -280,7 +280,7 @@ public sealed class EngineBridge : IDisposable
         // Mirror the shipped host: its exe runs with CWD = RendererHost dir; the engine's early
         // file probing may rely on that.
         var previousCwd = Environment.CurrentDirectory;
-        Environment.CurrentDirectory = _enscapeDir;
+        Environment.CurrentDirectory = _engineDir;
         try
         {
             var result = UseLegacyStart
@@ -317,7 +317,7 @@ public sealed class EngineBridge : IDisposable
         }
     }
 
-    /// <summary>Selects the original StartRenderer path instead of StartRenderer2 (feature-flag dependent in Chaos' host).</summary>
+    /// <summary>Selects the original StartRenderer path instead of StartRenderer2 (feature-flag dependent in the vendor's host).</summary>
     public static bool UseLegacyStart { get; set; } = !string.IsNullOrEmpty(Environment.GetEnvironmentVariable("POWERPOTION_START1"));
 
     /// <summary>Diagnostics: skip pre-init commands entirely (pass null).</summary>
@@ -327,7 +327,7 @@ public sealed class EngineBridge : IDisposable
     public static string? WorkDirOverride { get; set; } = Environment.GetEnvironmentVariable("POWERPOTION_WORKDIR");
 
     /// <summary>
-    /// Host application identity reported to the engine (Enscape uses REVIT for the Revit add-in).
+    /// Host application identity reported to the engine (the vendor host uses REVIT for the Revit add-in).
     /// Kept as a method so no Enscape.RendererApi type is touched before the assembly resolver is installed.
     /// </summary>
     private static HostApplication ResolveHostApplication() =>
@@ -447,7 +447,7 @@ public sealed class EngineBridge : IDisposable
     private static EnscapeInstance CreateManagedInstance()
     {
         // EnscapeInstance requires the internal native-API wrapper (private nested NativeApiInterface,
-        // public ctor) and an IRendererLogger. Mirror of what Chaos' RendererHost does.
+        // public ctor) and an IRendererLogger. Mirror of what the vendor's RendererHost does.
         var nativeApiType = typeof(EnscapeNativeApi).GetNestedType("NativeApiInterface",
             BindingFlags.NonPublic | BindingFlags.Public)
             ?? throw new InvalidOperationException("NativeApiInterface not found in Enscape.RendererApi.");
@@ -517,7 +517,7 @@ public sealed class EngineBridge : IDisposable
         }
 
         // UpdateWorld commits asynchronously; the world becomes visible when the callback fires.
-        // Do not block the UI thread waiting for it (Chaos' host is asynchronous here too).
+        // Do not block the UI thread waiting for it (the vendor's host is asynchronous here too).
         _onWorldUpdated = code =>
         {
             LogLine($"World update finished: {code}");
@@ -699,7 +699,7 @@ public sealed class EngineBridge : IDisposable
         else _lightIds.Add(dto.Id);
     }
 
-    /// <summary>Live-updates one material (remove + re-add with same id, mirroring Enscape's OverwriteMaterial semantics).</summary>
+    /// <summary>Live-updates one material (remove + re-add with same id, mirroring the vendor's OverwriteMaterial semantics).</summary>
     public void OverwriteMaterial(MaterialDto dto)
     {
         var worldApi = World();
@@ -748,7 +748,7 @@ public sealed class EngineBridge : IDisposable
     }
 
     // CameraParams is a shipped struct whose FOV/flags members are only fully settable through
-    // its fields (Chaos' own host fills it via NRBF deserialization). Public property setters
+    // its fields (the vendor's original host fills it via NRBF deserialization). Public property setters
     // cover position/orientation/etc.; fov, fovType and the ActiveFields backing field use reflection.
     // Nested class = lazy initialization: must not run before InstallAssemblyResolver.
     private static class CamFields

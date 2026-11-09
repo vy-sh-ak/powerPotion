@@ -1,6 +1,6 @@
 using System.IO;
 using GlmSharp;
-using PowerPotion.Host.Enscape;
+using PowerPotion.Host.Engine;
 using PowerPotion.Protocol;
 
 namespace PowerPotion.Host;
@@ -21,17 +21,17 @@ public static class SelfTest
         try { Console.WriteLine(m); } catch { }
     }
 
-    public static int Run(string enscapeDir, string dataDir, int frames, string? shotPath)
+    public static int Run(string engineDir, string dataDir, int frames, string? shotPath)
     {
         Directory.CreateDirectory(dataDir);
         shotPath = string.IsNullOrWhiteSpace(shotPath) ? Path.Combine(dataDir, "selftest.png") : shotPath;
         var logPath = Path.Combine(dataDir, "selftest.log");
         _log = new StreamWriter(logPath, append: false);
 
-        Log($"PowerPotion selftest — engine dir: {enscapeDir}");
+        Log($"PowerPotion selftest — engine dir: {engineDir}");
         Log($"Screenshot target: {shotPath}");
 
-        var engine = new EngineBridge(enscapeDir, dataDir);
+        var engine = new EngineBridge(engineDir, dataDir);
         engine.Log += Log;
 
         var tcs = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -60,7 +60,7 @@ public static class SelfTest
                 window.Show();
 
                 // drive the test from a worker thread; engine calls from non-UI threads are fine
-                // (Chaos' own host drives world APIs from its CAD message-loop thread).
+                // (the vendor's original host drives world APIs from its CAD message-loop thread).
                 var worker = new Thread(() => TestSequence(engine, app, tcs, frames, shotPath).GetAwaiter().GetResult())
                 {
                     IsBackground = true,

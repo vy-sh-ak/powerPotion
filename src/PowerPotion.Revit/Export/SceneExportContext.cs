@@ -6,7 +6,7 @@ namespace PowerPotion.Revit.Export;
 
 /// <summary>
 /// Revit CustomExporter context that walks the 3D view and produces a protocol
-/// WorldSnapshot — the same pipeline Enscape uses (IExportContext → ExportedWorld),
+/// WorldSnapshot — the same pipeline the vendor exporter uses (IExportContext → ExportedWorld),
 /// see docs/rea-report-revit-plugin.md §1–2: instance definitions deduplicated by
 /// SymbolGeometryId, triangulation via PolymeshTopology, front/back materials,
 /// photometric lights, and per-face UVs.
@@ -85,7 +85,7 @@ public sealed class SceneExportContext : IExportContext
             var category = element.Category;
             if (category != null && category.CategoryType == CategoryType.Model && category.SubCategories != null)
             {
-                // skip analysis/grid/legend-like categories quickly (Enscape's sanitizer set)
+                // skip analysis/grid/legend-like categories quickly (the vendor's sanitizer set)
                 var n = category.Name;
                 if (n is "Cameras" or "Lines" or "Detail Items" or "<Sketch>") return RenderNodeAction.Skip;
             }
@@ -113,7 +113,7 @@ public sealed class SceneExportContext : IExportContext
     public RenderNodeAction OnInstanceBegin(InstanceNode node)
     {
         // Instance geometry is delivered in the symbol's local coordinates: push the placement so
-        // every polymesh point is flattened into world space (same information Enscape carries in
+        // every polymesh point is flattened into world space (same information the vendor carries in
         // ExportedModelInstance.Transformation, applied at push time here).
         try { _transformStack.Add(node.GetTransform()); }
         catch { _transformStack.Add(Transform.Identity); }
@@ -252,7 +252,7 @@ public sealed class SceneExportContext : IExportContext
             _normals.Add((float)na.Item1); _normals.Add((float)na.Item2); _normals.Add((float)na.Item3);
             _normals.Add((float)nb.Item1); _normals.Add((float)nb.Item2); _normals.Add((float)nb.Item3);
             _normals.Add((float)nc.Item1); _normals.Add((float)nc.Item2); _normals.Add((float)nc.Item3);
-            // Revit UVs are in feet (Enscape scales them to meters the same way).
+            // Revit UVs are in feet (the vendor exporter scales them to meters the same way).
             _uvs.Add((float)(uv0.U * EngineSpace.FeetToMeters)); _uvs.Add((float)(uv0.V * EngineSpace.FeetToMeters));
             _uvs.Add((float)(uv1.U * EngineSpace.FeetToMeters)); _uvs.Add((float)(uv1.V * EngineSpace.FeetToMeters));
             _uvs.Add((float)(uv2.U * EngineSpace.FeetToMeters)); _uvs.Add((float)(uv2.V * EngineSpace.FeetToMeters));
@@ -368,7 +368,7 @@ public sealed class SceneExportContext : IExportContext
     }
 
     // ------------------------------------------------------------------
-    // Camera from the exported view (CameraInfo — same trick Enscape uses)
+    // Camera from the exported view (CameraInfo — same trick the vendor exporter uses)
     // ------------------------------------------------------------------
 
     private CameraUpdate? CameraFromView(ViewNode node)
@@ -398,7 +398,7 @@ public sealed class SceneExportContext : IExportContext
             {
                 if (cameraInfo.IsPerspective)
                 {
-                    // horizontal FOV = 2·atan(hExtent / (2·targetDistance)) — Enscape's formula
+                    // horizontal FOV = 2·atan(hExtent / (2·targetDistance)) — the vendor's formula
                     var target = cameraInfo.TargetDistance;
                     if (target > 0)
                     {

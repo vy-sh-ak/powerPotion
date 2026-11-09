@@ -127,7 +127,7 @@ public sealed class PowerPotionApp : IExternalApplication
             "Edit PowerPotion material overrides for the current document.", "material");
 
         AddButton(panelTools, new PushButtonData(
-            "PowerPotionSun", "Sun &&\nLocation", assemblyPath,
+            "PowerPotionSun", "Sun &\nLocation", assemblyPath,
             typeof(SunCommand).FullName),
             "Re-push sun, date and location to the renderer.", "sun");
 
@@ -196,7 +196,7 @@ public sealed class PowerPotionApp : IExternalApplication
         return installed;
     }
 
-    /// <summary>Command availability: always visible (mirrors Enscape's AlwaysVisibleExternalCommandAvailability).</summary>
+    /// <summary>Command availability: always visible (mirrors the vendor's AlwaysVisibleExternalCommandAvailability).</summary>
     public sealed class AlwaysAvailable : IExternalCommandAvailability
     {
         public bool IsCommandAvailable(UIApplication applicationData, CategorySet selectedCategories) => true;

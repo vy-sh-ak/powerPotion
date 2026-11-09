@@ -3,7 +3,7 @@ using System.Net.Sockets;
 using System.Windows;
 using System.Windows.Threading;
 using PowerPotion.Host;
-using PowerPotion.Host.Enscape;
+using PowerPotion.Host.Engine;
 using PowerPotion.Host.Net;
 
 namespace PowerPotion.Host;
@@ -35,22 +35,22 @@ public static class Program
             }
         }
 
-        var enscapeDir = EnscapeLocator.FindRendererHostDir();
-        if (enscapeDir == null)
+        var engineDir = EngineLocator.FindRendererHostDir();
+        if (engineDir == null)
         {
             Console.Error.WriteLine("PowerPotion: no compatible renderer installation found. " +
-                "Install the renderer or set POWERPOTION_ENSCAPE_DIR to its RendererHost directory.");
+                "Install the renderer or set POWERPOTION_ENGINE_DIR to its RendererHost directory.");
             return 3;
         }
 
         var dataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PowerPotion");
-        EngineBridge.InstallAssemblyResolver(enscapeDir);
+        EngineBridge.InstallAssemblyResolver(engineDir);
         HostLog.Initialize(Path.Combine(dataDir, "Logs"));
 
         if (selftest)
         {
-            return SelfTest.Run(enscapeDir, dataDir, frames, shot);
+            return SelfTest.Run(engineDir, dataDir, frames, shot);
         }
 
         var settings = HostSettings.Load();
@@ -65,7 +65,7 @@ public static class Program
         TaskScheduler.UnobservedTaskException += (_, e) =>
             HostLog.Exception("Unobserved task", e.Exception);
 
-        var engine = new EngineBridge(enscapeDir, dataDir);
+        var engine = new EngineBridge(engineDir, dataDir);
 
         HostConnection? connection = null;
         if (port > 0)
@@ -104,7 +104,7 @@ public static class Program
 
     private static int Locate()
     {
-        var dir = EnscapeLocator.FindRendererHostDir();
+        var dir = EngineLocator.FindRendererHostDir();
         Console.WriteLine(dir is null ? "not found" : dir);
         return dir is null ? 1 : 0;
     }

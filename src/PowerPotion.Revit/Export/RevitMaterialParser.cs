@@ -9,7 +9,7 @@ namespace PowerPotion.Revit.Export;
 /// <summary>
 /// Converts Revit materials into protocol MaterialDto: graphics fallback (color/transparency)
 /// plus appearance assets (generic + common Revit schemas, textures, bump, self-illumination)
-/// and name-keyword material typing — mirroring Enscape's MaterialParser/AssetFinder pipeline
+/// and name-keyword material typing — mirroring the vendor's MaterialParser/AssetFinder pipeline
 /// (docs/rea-report-revit-plugin.md §5).
 /// </summary>
 public sealed class RevitMaterialParser
@@ -33,7 +33,7 @@ public sealed class RevitMaterialParser
 
     /// <summary>
     /// Material for one exported face. Uses the face's effective appearance asset when the face has a
-    /// paint/view override, otherwise the document material (Enscape's MaterialSourceSelector does the
+    /// paint/view override, otherwise the document material (the vendor's MaterialSourceSelector does the
     /// same via MaterialNode.HasOverriddenAppearance / GetAppearanceOverride).
     /// </summary>
     public MaterialDto? GetOrParse(MaterialNode node)
@@ -142,8 +142,8 @@ public sealed class RevitMaterialParser
     }
 
     /// <summary>
-    /// Schema → albedo property, from Enscape's MaterialParser literals (REA evidence:
-    /// Enscape.Revit.Plugin.Materials.MaterialParser #US). The grouped bitmap for a Revit material is
+    /// Schema → albedo property, from the vendor's MaterialParser literals (REA evidence:
+    /// the vendor Revit plugin MaterialParser #US). The grouped bitmap for a Revit material is
     /// connected to this property, not always to generic_diffuse — this is why e.g. a MasonryCMU roof
     /// used to lose its terracotta texture and fall back to white.
     /// </summary>

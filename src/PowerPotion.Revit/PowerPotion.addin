@@ -6,6 +6,6 @@
     <AddInId>7F5A1C92-3B4D-4E8F-9A60-2C7D1B55E4A3</AddInId>
     <FullClassName>PowerPotion.Revit.PowerPotionApp</FullClassName>
     <VendorId>PWPT</VendorId>
-    <VendorDescription>PowerPotion (personalized Enscape-style renderer)</VendorDescription>
+    <VendorDescription>PowerPotion (personalized real-time renderer)</VendorDescription>
   </AddIn>
 </RevitAddIns>

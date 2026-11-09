@@ -1,72 +1,73 @@
-=== Enscape.RendererApi.IEnscapeApiScope   ===
-    Boolean TryGetWorldApi(out IEnscapeWorldApi& worldApi)
-    Boolean TryGetBuildingPerformanceApi(out IEnscapeBuildingPerformanceApi& buildingPerformanceApi)
-    Boolean TryGetCameraApi(out IEnscapeCameraApi& cameraApi)
-    Boolean TryGetKeyboardInputApi(out IEnscapeKeyboardInputApi& keyboardInputApi)
-    Boolean TryGetCaptureApi(out IEnscapeCaptureApi& captureApi)
-    Boolean TryGetSceneApi(out IEnscapeSceneApi& sceneApi)
-    Boolean TryGetSectionPlanesApi(out IEnscapeSectionPlanesApi& sectionPlanesApi)
-    Boolean TryGetSelectionApi(out IEnscapeSelectionApi& selectionApi)
-    Boolean TryGetSunAndLocationApi(out IEnscapeSunAndLocationApi& sunAndLocationApi)
-    Boolean TryGetAnnotationApi(out IEnscapeAnnotationApi& annotationApi)
-    Boolean TryGetUtilitiesApi(out IEnscapeUtilitiesApi& utilitiesApi)
-    Boolean TryGetSettingsApi(out IEnscapeSettingsApi& settingsApi)
-    Boolean TryGetRpcApi(out IEnscapeRpcApi& rpcApi)
-    Boolean TryGetWindowApi(out IEnscapeWindowApi& windowApi)
-    Boolean TryGetVideoEditorApi(out IEnscapeVideoEditorApi& videoEditorApi)
-    Boolean TryGetHardwareApi(out IEnscapeHardwareApi& hardwareApi)
-    Boolean TryGetEntityGroupApi(out IEnscapeEntityGroupApi& entityGroupApi)
-    Boolean TryGetInteractionApi(out IEnscapeInteractionApi& interactionApi)
-    Boolean TryGetPlaceholderApi(out IEnscapePlaceholderApi& placeholderApi)
-    Boolean TryGetIntersectionQueryApi(out IEnscapeIntersectionQueryApi& intersectionQueryApi)
-    Boolean TryGetFootprintImageApi(out IEnscapeFootprintPathApi& footprintImageApi)
-    Boolean TryGetInputApi(out IEnscapeInputApi& inputApi)
-    Boolean TryGetHeadlessApi(out IEnscapeHeadlessApi& headlessApi)
-    Boolean TryGetStreamingApi(out IEnscapeStreamingApi& streamingApi)
-=== Enscape.RendererApi.IStartupParameters   ===
+NOTE: vendor names anonymized - 'Upstream' identifiers are the anonymized names of managed types in the rendering engine's managed API assembly (loaded at runtime from C:\Program Files\Enscape\RendererHost).
+=== Upstream.RendererApi.IUpstreamApiScope   ===
+    Boolean TryGetWorldApi(out IUpstreamWorldApi& worldApi)
+    Boolean TryGetBuildingPerformanceApi(out IUpstreamBuildingPerformanceApi& buildingPerformanceApi)
+    Boolean TryGetCameraApi(out IUpstreamCameraApi& cameraApi)
+    Boolean TryGetKeyboardInputApi(out IUpstreamKeyboardInputApi& keyboardInputApi)
+    Boolean TryGetCaptureApi(out IUpstreamCaptureApi& captureApi)
+    Boolean TryGetSceneApi(out IUpstreamSceneApi& sceneApi)
+    Boolean TryGetSectionPlanesApi(out IUpstreamSectionPlanesApi& sectionPlanesApi)
+    Boolean TryGetSelectionApi(out IUpstreamSelectionApi& selectionApi)
+    Boolean TryGetSunAndLocationApi(out IUpstreamSunAndLocationApi& sunAndLocationApi)
+    Boolean TryGetAnnotationApi(out IUpstreamAnnotationApi& annotationApi)
+    Boolean TryGetUtilitiesApi(out IUpstreamUtilitiesApi& utilitiesApi)
+    Boolean TryGetSettingsApi(out IUpstreamSettingsApi& settingsApi)
+    Boolean TryGetRpcApi(out IUpstreamRpcApi& rpcApi)
+    Boolean TryGetWindowApi(out IUpstreamWindowApi& windowApi)
+    Boolean TryGetVideoEditorApi(out IUpstreamVideoEditorApi& videoEditorApi)
+    Boolean TryGetHardwareApi(out IUpstreamHardwareApi& hardwareApi)
+    Boolean TryGetEntityGroupApi(out IUpstreamEntityGroupApi& entityGroupApi)
+    Boolean TryGetInteractionApi(out IUpstreamInteractionApi& interactionApi)
+    Boolean TryGetPlaceholderApi(out IUpstreamPlaceholderApi& placeholderApi)
+    Boolean TryGetIntersectionQueryApi(out IUpstreamIntersectionQueryApi& intersectionQueryApi)
+    Boolean TryGetFootprintImageApi(out IUpstreamFootprintPathApi& footprintImageApi)
+    Boolean TryGetInputApi(out IUpstreamInputApi& inputApi)
+    Boolean TryGetHeadlessApi(out IUpstreamHeadlessApi& headlessApi)
+    Boolean TryGetStreamingApi(out IUpstreamStreamingApi& streamingApi)
+=== Upstream.RendererApi.IStartupParameters   ===
     prop Boolean EnableRpc { get:True set:False }
     prop List`1 PreInitCommands { get:True set:False }
     prop Boolean SetWorkingDirectory { get:True set:False }
     prop Boolean Standalone { get:True set:False }
     prop Boolean StartWithHwrtEnabled { get:True set:False }
     prop Boolean StartWithDlssEnabled { get:True set:False }
-=== Enscape.RendererApi.StartupParameters   ===
+=== Upstream.RendererApi.StartupParameters   ===
     prop List`1 PreInitCommands { get:True set:True }
     prop Boolean EnableRpc { get:True set:True }
     prop Boolean Standalone { get:True set:True }
     prop Boolean SetWorkingDirectory { get:True set:True }
     prop Boolean StartWithHwrtEnabled { get:True set:False }
     prop Boolean StartWithDlssEnabled { get:True set:False }
-=== MISSING Enscape.RendererApi.SlotSource ===
-=== MISSING Enscape.RendererApi.WcsType ===
-=== Enscape.RendererApi.BumpMapKind [enum] [struct] ===
+=== MISSING Upstream.RendererApi.SlotSource ===
+=== MISSING Upstream.RendererApi.WcsType ===
+=== Upstream.RendererApi.BumpMapKind [enum] [struct] ===
     UNDEFINED = 0
     BUMP = 1
     NORMAL = 2
     DISPLACEMENT = 3
-=== Enscape.RendererApi.MaterialType [enum] [struct] ===
+=== Upstream.RendererApi.MaterialType [enum] [struct] ===
     DEFAULT = 0
     GRASS = 1
     WATER = 2
     FOLIAGE = 3
     CLEARCOAT = 4
     GLASS = 5
-=== MISSING Enscape.RendererApi.LightDistribution ===
-=== MISSING Enscape.RendererApi.LightShape ===
-=== MISSING Enscape.RendererApi.SunMode ===
-=== Enscape.RendererApi.ProjectLocation   ===
+=== MISSING Upstream.RendererApi.LightDistribution ===
+=== MISSING Upstream.RendererApi.LightShape ===
+=== MISSING Upstream.RendererApi.SunMode ===
+=== Upstream.RendererApi.ProjectLocation   ===
     prop Double Latitude { get:True set:True }
     prop Double Longitude { get:True set:True }
     prop Double NorthAngle { get:True set:True }
     prop Double TimeZone { get:True set:True }
-=== Enscape.RendererApi.ExplicitSunPosition   ===
+=== Upstream.RendererApi.ExplicitSunPosition   ===
     vec3 ToSunVector(Double northAngleRadians)
     prop Double Altitude { get:True set:True }
     prop Double Azimuth { get:True set:True }
-=== Enscape.RendererApi.SceneParams  [struct] ===
+=== Upstream.RendererApi.SceneParams  [struct] ===
     field CameraParams Camera
     field SceneTimeParams Time
-=== Enscape.RendererApi.SceneTimeParams  [struct] ===
+=== Upstream.RendererApi.SceneTimeParams  [struct] ===
     field SunMode SunMode
     field Int32 Day
     field Int32 Month
@@ -78,13 +79,13 @@
     field Single SunX
     field Single SunY
     field Single SunZ
-=== MISSING Enscape.RendererApi.SoundSourceParams ===
-=== Enscape.RendererApi.BillboardType [enum] [struct] ===
+=== MISSING Upstream.RendererApi.SoundSourceParams ===
+=== Upstream.RendererApi.BillboardType [enum] [struct] ===
     NO_BILLBOARD = 0
     NO_UV_ATLAS = 0
     BILLBOARD = 1
     UV_ATLAS = 2
-=== Enscape.RendererApi.FamilyClass [enum] [struct] ===
+=== Upstream.RendererApi.FamilyClass [enum] [struct] ===
     UNDEFINED = 0
     DOOR = 1
     WALL = 2
@@ -108,7 +109,7 @@
     ENTOURAGE = 20
     EXTERNAL_MODEL = 21
     SOUNDSOURCE = 22
-    ENSCAPE_CAMERA = 23
+    UPSTREAM_CAMERA = 23
     RPC = 24
     RPC_FOLIAGE = 25
     RPC_PEOPLE = 26
@@ -117,7 +118,7 @@
     MODEL_GROUPS = 29
     REVIT_LINK = 30
     SKATTER = 31
-=== Enscape.RendererApi.DataModel.ModelData   ===
+=== Upstream.RendererApi.DataModel.ModelData   ===
     Void Add(ModelData data)
     Void Add(ModelData data, mat4 transform)
     prop FamilyClass FamilyClass { get:True set:True }
@@ -129,7 +130,7 @@
     prop List`1 IndexCollectors { get:True set:False }
     prop List`1 Decals { get:True set:False }
     prop Int32 NumIndices { get:True set:True }
-=== Enscape.RendererApi.DataModel.IndexCollector   ===
+=== Upstream.RendererApi.DataModel.IndexCollector   ===
     IndexCollector Clone()
     Void AddOffset(Int32 offset)
     Void RevertFaceWindingOrder()
@@ -138,65 +139,65 @@
     prop Int32 BacksideMaterialId { get:True set:True }
     prop Nullable`1 LodStart { get:True set:True }
     prop Nullable`1 LodEnd { get:True set:True }
-=== Enscape.RendererApi.DataModel.DecalData   ===
-=== Enscape.RendererApi.VertexDataType [enum] [struct] ===
+=== Upstream.RendererApi.DataModel.DecalData   ===
+=== Upstream.RendererApi.VertexDataType [enum] [struct] ===
     UINT_32 = 0
     UVEC4_16 = 1
     VEC2_SFLOAT_32 = 2
     VEC3_SFLOAT_32 = 3
     VEC4_SFLOAT_32 = 4
-=== Enscape.RendererApi.VertexAttributeType [enum] [struct] ===
+=== Upstream.RendererApi.VertexAttributeType [enum] [struct] ===
     POSITION = 0
     NORMAL = 1
     UVS_FRONT = 2
     UVS_BACK = 3
     ANIM_VEGETATION_COLOR = 4
     TANGENT = 5
-=== Enscape.RendererApi.PhysModelType [enum] [struct] ===
+=== Upstream.RendererApi.PhysModelType [enum] [struct] ===
     ORIGINAL_MODEL = 0
     PHYS_MODEL = 1
     NO_PHYS = 2
     BOX = 3
     SPHERE = 4
-=== Enscape.RendererApi.VertexAttributeBufferDescription  [struct] ===
+=== Upstream.RendererApi.VertexAttributeBufferDescription  [struct] ===
     field IntPtr VertexBuffer
     field VertexDataType DataType
     field VertexAttributeType AttributeType
     field UInt64 NumberOfVertices
-=== Enscape.RendererApi.EnscapeWindowApi   ===
-    EnscapeResult GetRenderWindowHandle(ref IntPtr& hWnd)
-    EnscapeResult GetVersion(out String& version)
-    EnscapeResult GetVersionWithBuild(out String& version)
-    EnscapeResult SetConsoleEnabled(Boolean enableConsole)
-    EnscapeResult WaitForLoopModeIdle()
-=== Enscape.RendererApi.IEnscapeWindowApi   ===
-    EnscapeResult GetRenderWindowHandle(ref IntPtr& hWnd)
-    EnscapeResult GetVersion(out String& version)
-    EnscapeResult GetVersionWithBuild(out String& version)
-    EnscapeResult SetConsoleEnabled(Boolean enableConsole)
-    EnscapeResult WaitForLoopModeIdle()
-=== Enscape.RendererApi.StandaloneMode [enum] [struct] ===
+=== Upstream.RendererApi.UpstreamWindowApi   ===
+    UpstreamResult GetRenderWindowHandle(ref IntPtr& hWnd)
+    UpstreamResult GetVersion(out String& version)
+    UpstreamResult GetVersionWithBuild(out String& version)
+    UpstreamResult SetConsoleEnabled(Boolean enableConsole)
+    UpstreamResult WaitForLoopModeIdle()
+=== Upstream.RendererApi.IUpstreamWindowApi   ===
+    UpstreamResult GetRenderWindowHandle(ref IntPtr& hWnd)
+    UpstreamResult GetVersion(out String& version)
+    UpstreamResult GetVersionWithBuild(out String& version)
+    UpstreamResult SetConsoleEnabled(Boolean enableConsole)
+    UpstreamResult WaitForLoopModeIdle()
+=== Upstream.RendererApi.StandaloneMode [enum] [struct] ===
     CLOUD = 0
     PLAIN = 1
     SLIM = 2
     WEB = 3
-=== MISSING Enscape.RendererApi.CallbackProcExt ===
-=== Enscape.RendererApi.EnscapeHeadlessApi   ===
-    EnscapeResult IsHeadlessModeEnabled(ref Boolean& isEnabled)
-    EnscapeResult StartHostMemoryScreenshotCapturing(LayeredHostMemory outputLayeredHostMemory, EnscapeCallbackProc onFinished)
-=== Enscape.RendererApi.IEnscapeHeadlessApi   ===
-    EnscapeResult IsHeadlessModeEnabled(ref Boolean& isEnabled)
-    EnscapeResult StartHostMemoryScreenshotCapturing(LayeredHostMemory memory, EnscapeCallbackProc onFinished)
-=== Enscape.RendererApi.EnscapeHardwareApi   ===
-    static EnscapeResult GetGpuInformation(IEnscapeApiNative api, out GpuInformation[]& gpuInformation, ref UInt32& primaryGpu, out String& log)
-    EnscapeResult GetGpuInformation(out GpuInformation[]& gpuInformation, ref UInt32& primaryGpu, out String& log)
-    static EnscapeResult GetDlssInformation(IEnscapeApiNative api, String deviceName, ref Boolean& isDlssAvailable, out String& log)
-    EnscapeResult GetDlssInformation(String deviceName, ref Boolean& isDlssAvailable, out String& log)
-    EnscapeResult GetSupportedGPUFeatureFlags(ref GpuFeatureFlags& gpuFeatureFlags)
-=== Enscape.RendererApi.IEnscapeHardwareApi   ===
-    EnscapeResult GetSupportedGPUFeatureFlags(ref GpuFeatureFlags& gpuFeatureFlags)
-    EnscapeResult GetGpuInformation(out GpuInformation[]& gpuInformation, ref UInt32& primaryGpu, out String& log)
-=== Enscape.RendererApi.GpuInformation  [struct] ===
+=== MISSING Upstream.RendererApi.CallbackProcExt ===
+=== Upstream.RendererApi.UpstreamHeadlessApi   ===
+    UpstreamResult IsHeadlessModeEnabled(ref Boolean& isEnabled)
+    UpstreamResult StartHostMemoryScreenshotCapturing(LayeredHostMemory outputLayeredHostMemory, UpstreamCallbackProc onFinished)
+=== Upstream.RendererApi.IUpstreamHeadlessApi   ===
+    UpstreamResult IsHeadlessModeEnabled(ref Boolean& isEnabled)
+    UpstreamResult StartHostMemoryScreenshotCapturing(LayeredHostMemory memory, UpstreamCallbackProc onFinished)
+=== Upstream.RendererApi.UpstreamHardwareApi   ===
+    static UpstreamResult GetGpuInformation(IUpstreamApiNative api, out GpuInformation[]& gpuInformation, ref UInt32& primaryGpu, out String& log)
+    UpstreamResult GetGpuInformation(out GpuInformation[]& gpuInformation, ref UInt32& primaryGpu, out String& log)
+    static UpstreamResult GetDlssInformation(IUpstreamApiNative api, String deviceName, ref Boolean& isDlssAvailable, out String& log)
+    UpstreamResult GetDlssInformation(String deviceName, ref Boolean& isDlssAvailable, out String& log)
+    UpstreamResult GetSupportedGPUFeatureFlags(ref GpuFeatureFlags& gpuFeatureFlags)
+=== Upstream.RendererApi.IUpstreamHardwareApi   ===
+    UpstreamResult GetSupportedGPUFeatureFlags(ref GpuFeatureFlags& gpuFeatureFlags)
+    UpstreamResult GetGpuInformation(out GpuInformation[]& gpuInformation, ref UInt32& primaryGpu, out String& log)
+=== Upstream.RendererApi.GpuInformation  [struct] ===
     field String Model
     field String Vendor
     field String DriverVersion
@@ -205,7 +206,7 @@
     field GpuFeatureFlags SupportedFeatureFlags
     field QualityLevel DefaultQualityLevel
     field RendererSettingFlags DefaultRendererSettingFlags
-=== Enscape.RendererApi.GpuFeatureFlags [enum] [struct] ===
+=== Upstream.RendererApi.GpuFeatureFlags [enum] [struct] ===
     NONE = 0
     HARDWARE_RAYTRACING = 1
     VR = 2

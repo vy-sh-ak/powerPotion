@@ -4,14 +4,15 @@
   <img src="assets/branding/logo-badge.png" width="150" alt="PowerPotion logo"/>
 </p>
 
-**A personalized, clean-room re-implementation of the Chaos Enscape Revit plugin** — real-time
-rendering, material editing, sun/location, cloud & sky, and capture — **without VR and without
-authentication**, packaged as a single installer with a clean uninstaller.
+**A personalized, clean-room re-implementation of the upstream Revit real-time renderer
+plugin** — real-time rendering, material editing, sun/location, cloud & sky, and capture —
+**without VR and without authentication**, packaged as a single installer with a clean
+uninstaller.
 
-PowerPotion was built from static reverse-engineering evidence gathered with the REA toolkit on
-the installed Enscape 4.7.0.57 product. It does **not** contain or modify any Chaos code: it
-loads the rendering engine of your **separately licensed Enscape installation** at runtime,
-through the same managed API (`Enscape.RendererApi.dll`) that Chaos' own RendererHost uses.
+PowerPotion was built from static reverse-engineering evidence gathered with the REA toolkit
+on the installed 4.7.0.57 renderer product. It does **not** contain or modify any third-party
+code: it loads the rendering engine of your **separately licensed renderer installation** at
+runtime, through the same managed API (`Enscape.RendererApi.dll`) the vendor's own host uses.
 Anything the engine enforces internally (including entitlement) stays fully in effect.
 
 ## What's inside
@@ -20,22 +21,22 @@ Anything the engine enforces internally (including entitlement) stays fully in e
 power-potion/
 ├── assets/branding/              # logo (SVG/PNG/ICO), ribbon icons, installer art
 ├── docs/                          # REA evidence reports + architecture notes
-│   ├── ARCHITECTURE.md            # how Enscape works + how PowerPotion maps onto it
-│   ├── rea-report-revit-plugin.md # full REA analysis of Enscape's Revit add-in
+│   ├── ARCHITECTURE.md            # how the upstream renderer works + how PowerPotion maps onto it
+│   ├── rea-report-revit-plugin.md # full REA analysis of the upstream Revit add-in
 │   ├── rea-report-rendererhost.md # full REA analysis of the renderer host + native API
 │   └── rendererapi-surface*.txt   # reflection dumps of the shipped managed API
 ├── src/
 │   ├── PowerPotion.Protocol/      # wire protocol between Revit add-in and renderer host
-│   ├── PowerPotion.Host/          # WPF renderer host (embeds the Enscape engine window)
+│   ├── PowerPotion.Host/          # WPF renderer host (embeds the engine window)
 │   └── PowerPotion.Revit/         # Revit 2026 add-in (ribbon, exporter, live sync)
 ├── installer/PowerPotion.iss      # Inno Setup script → PowerPotionSetup.exe
 ├── build.cmd                     # builds everything + packages the installer
 └── LICENSE.txt                   # personal/educational use, trademark notes
 ```
 
-## Feature mapping (Enscape → PowerPotion)
+## Feature mapping (upstream → PowerPotion)
 
-| Enscape feature (observed) | PowerPotion | Notes |
+| Upstream feature (observed) | PowerPotion | Notes |
 |---|---|---|
 | Real-time render window (RendererHost.exe) | `PowerPotion.Host.exe` | same embedded-window native API |
 | Ribbon tab + panels | PowerPotion tab | Start/Stop/Pause, capture, material editor, sun |
@@ -52,9 +53,9 @@ power-potion/
 ## Prerequisites
 
 * **Autodesk Revit 2026** (the add-in targets the .NET 8 Revit API)
-* **Chaos Enscape 4.7+** installed and licensed — PowerPotion locates it at
-  `C:\Program Files\Enscape\RendererHost` (or via `POWERPOTION_ENSCAPE_DIR`) and uses its engine
-* Windows 10/11 x64 with a Vulkan-capable GPU (same requirements as Enscape itself)
+* **The rendering engine, 4.7+** installed and licensed — PowerPotion locates it at
+  `C:\Program Files\Enscape\RendererHost` (or via `POWERPOTION_ENGINE_DIR`) and uses its engine
+* Windows 10/11 x64 with a Vulkan-capable GPU (same requirements as the engine itself)
 
 ## Build
 
@@ -77,12 +78,12 @@ build.cmd
 * **Uninstall**: `Add/Remove Programs → PowerPotion` (or the Start-menu entry). The uninstaller
   * kills a running renderer host,
   * removes the add-in manifest, add-in DLLs, host app, `%LocalAppData%\PowerPotion` and
-    `%AppData%\PowerPotion` (settings), leaving Revit and Enscape untouched.
+    `%AppData%\PowerPotion` (settings), leaving Revit and the engine installation untouched.
 
 ## How it works (short version)
 
 1. The Revit add-in exports the active 3D view with Revit's own `CustomExporter`
-   (`IExportContext`) — the same pipeline Enscape's plugin uses — into a compact binary world
+   (`IExportContext`) — the same pipeline the upstream plugin uses — into a compact binary world
    snapshot (geometry, materials, lights, sun, camera).
 2. It starts `PowerPotion.Host.exe --port <n>`, which loads the installed
    `Enscape.RendererApi.dll` + native engine, embeds the engine's render window into a WPF
@@ -91,7 +92,7 @@ build.cmd
    camera is streamed at ~30 Hz; sun/location and material edits push on demand.
 4. The host's settings panels map directly onto the engine's console-variable (CVar) interface
    (`r_skyboxFile`, `r_cloudDensity`, `r_fog`, `g_SunPower`, `sys_spec`, `r_hwrt`, `r_dlss`, …)
-   — the same mechanism Chaos' RendererHost uses for its Visual Settings.
+   — the same mechanism the vendor's host uses for its Visual Settings.
 
 Full evidence trail, API surface maps and the empirical calibration notes:
 **docs/ARCHITECTURE.md**.
@@ -117,4 +118,4 @@ dotnet run --project tools\BrandGen
 
 Personal/educational use. PowerPotion does not bypass or remove any license enforcement;
 it simply never calls the managed license layer, and any engine-internal checks in your
-licensed Enscape installation remain in effect. See `LICENSE.txt`.
+licensed renderer installation remain in effect. See `LICENSE.txt`.

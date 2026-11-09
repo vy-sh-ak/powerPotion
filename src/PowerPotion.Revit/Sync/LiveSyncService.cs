@@ -12,7 +12,7 @@ namespace PowerPotion.Revit.Sync;
 
 /// <summary>
 /// Owns the live-rendering session: exports the active 3D view, starts the renderer host
-/// process, serves the world over a localhost TCP socket (same architecture as Enscape's
+/// process, serves the world over a localhost TCP socket (same architecture as the vendor's
 /// RemoteCadServer → RendererHost --port), pushes camera updates on Idling and re-exports
 /// on DocumentChanged with a debounce.
 /// </summary>
@@ -102,7 +102,7 @@ public sealed class LiveSyncService : IDisposable
 
         // The initial export MUST run inside a Revit API context (CustomExporter is not
         // thread-safe and cannot be called from a worker thread). The ExternalEvent mirrors
-        // Enscape's RevitCadDispatcher and runs as soon as the host is connected.
+        // the vendor's RevitCadDispatcher and runs as soon as the host is connected.
         _ = Task.Run(async () =>
         {
             try
@@ -123,7 +123,7 @@ public sealed class LiveSyncService : IDisposable
         public void Execute(UIApplication app) => _owner.ExecutePendingExport();
     }
 
-    /// <summary>Queues an export on Revit's API thread (ExternalEvent, like Enscape's CAD dispatcher).</summary>
+    /// <summary>Queues an export on Revit's API thread (ExternalEvent, like the vendor's CAD dispatcher).</summary>
     private void RequestExport(string reason)
     {
         try
@@ -739,7 +739,7 @@ public sealed class LiveSyncService : IDisposable
     }
 
     /// <summary>
-    /// Revit texture search roots, mirroring Enscape's FileLocator: Revit.ini material libraries and
+    /// Revit texture search roots, mirroring the vendor's FileLocator: Revit.ini material libraries and
     /// additional render appearance paths, the per-version RVT material libraries, the shared Autodesk
     /// material libraries, and the document folder.
     /// </summary>

@@ -2,10 +2,10 @@ using System.Runtime.InteropServices;
 using System.Windows.Threading;
 using PowerPotion.Protocol;
 
-namespace PowerPotion.Host.Enscape;
+namespace PowerPotion.Host.Engine;
 
 /// <summary>
-/// Enscape-style free navigation for the embedded renderer.
+/// smooth free-form navigation for the embedded renderer.
 ///
 /// • Fly mode  – 6-DOF: W/A/S/D move, Q/E down/up, right-mouse look, wheel dollies, Shift fast, Ctrl slow.
 /// • Walk mode – eye height fixed at 1.7 m: W/A/S/D + look, wheel walks forward/back, Q/E disabled.

@@ -6,8 +6,8 @@ setlocal
 echo --- host self-locate ---
 "%LOCALAPPDATA%\PowerPotion\PowerPotion.Host.exe" --locate
 if errorlevel 1 (
-    echo FAILED: the renderer host could not find the Enscape engine.
-    echo Make sure Enscape 4.7+ is installed, or set POWERPOTION_ENSCAPE_DIR.
+    echo FAILED: the renderer host could not find the rendering engine.
+    echo Make sure the rendering engine (4.7+) is installed, or set POWERPOTION_ENGINE_DIR.
     exit /b 1
 )
 

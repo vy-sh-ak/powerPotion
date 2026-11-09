@@ -5,7 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
-using PowerPotion.Host.Enscape;
+using PowerPotion.Host.Engine;
 using PowerPotion.Host.Net;
 using PowerPotion.Protocol;
 
@@ -121,7 +121,7 @@ public partial class MainWindow : Window
             SetStatus("Scene updated.");
             PresentWindow();
 
-            // Right after the first world switch the engine paints its own "chaos Enscape
+            // Right after the first world switch the engine paints its own "vendor
             // Loading …" screen in the render window for a moment (shader/texture warm-up).
             // Keep the branded splash on top for a short settle period, then reveal the renderer.
             if (_surface is { IsEngineWindowShown: false })
@@ -280,7 +280,7 @@ public partial class MainWindow : Window
         // clicking the toolbar must not steal focus from the buttons.
         Activated += (_, _) =>
         {
-            if (_engine.NativeWindowHandle != IntPtr.Zero && Enscape.Win32.IsOverWindow(_engine.NativeWindowHandle))
+            if (_engine.NativeWindowHandle != IntPtr.Zero && Engine.Win32.IsOverWindow(_engine.NativeWindowHandle))
                 _engine.FocusRenderWindow();
         };
         Deactivated += (_, _) => _engine.NotifyFocus(false);
@@ -292,7 +292,7 @@ public partial class MainWindow : Window
         _engine.Log += m =>
         {
             // Engine diagnostics stay in the log; the status bar must never surface engine-branded
-            // text/paths (e.g. the installed Enscape directory).
+            // text/paths (e.g. the installed engine directory).
             HostLog.Write("engine: " + m);
         };
         _engine.ClosedFromEngine += () =>
@@ -325,7 +325,7 @@ public partial class MainWindow : Window
                 SetStatus("Disconnected from Revit.");
                 _connection = null;
                 // The renderer host is a child of the Revit session: do not leave an orphan window
-                // behind when Revit closes/crashes (Enscape's host behaves the same way).
+                // behind when Revit closes/crashes (the vendor's host behaves the same way).
                 if (_connectedToRevit) Close();
             });
         }
@@ -355,7 +355,7 @@ public partial class MainWindow : Window
                 UpdateNavigationUi();
                 if (_pendingWorld == null)
                 {
-                    // Do not reveal the native window yet: the engine paints its own "Enscape"
+                    // Do not reveal the native window yet: the engine paints its vendor-branded splash
                     // splash there until it has a scene, and that native splash used to appear
                     // behind the branded loader. The window is shown on the first world commit.
                     ShowLoading("Renderer ready — waiting for scene from Revit…");

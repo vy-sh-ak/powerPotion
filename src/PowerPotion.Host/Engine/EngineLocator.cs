@@ -1,17 +1,17 @@
 using System.IO;
 using Microsoft.Win32;
 
-namespace PowerPotion.Host.Enscape;
+namespace PowerPotion.Host.Engine;
 
-/// <summary>Locates the installed Enscape product that provides the native rendering engine.</summary>
-public static class EnscapeLocator
+/// <summary>Locates the installed third-party rendering engine product that provides the native rendering engine.</summary>
+public static class EngineLocator
 {
     public const string DefaultDir = @"C:\Program Files\Enscape\RendererHost";
 
     public static string? FindRendererHostDir()
     {
         // 1. explicit override
-        var env = Environment.GetEnvironmentVariable("POWERPOTION_ENSCAPE_DIR");
+        var env = Environment.GetEnvironmentVariable("POWERPOTION_ENGINE_DIR");
         if (!string.IsNullOrWhiteSpace(env) && IsValid(env)) return env;
 
         // 2. default install location

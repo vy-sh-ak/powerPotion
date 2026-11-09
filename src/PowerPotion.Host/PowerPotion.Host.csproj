@@ -13,8 +13,8 @@
     <ApplicationIcon>Assets\powerpotion.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <InvariantGlobalization>false</InvariantGlobalization>
-    <!-- Location of the installed Enscape product that provides the rendering engine. -->
-    <EnscapeDir Condition="'$(EnscapeDir)'==''">C:\Program Files\Enscape\RendererHost</EnscapeDir>
+    <!-- Location of the installed third-party rendering engine product. -->
+    <EngineDir Condition="'$(EngineDir)'==''">C:\Program Files\Enscape\RendererHost</EngineDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,22 +26,22 @@
   </ItemGroup>
 
   <!--
-    The Enscape engine is used at RUNTIME from the locally installed (licensed) Enscape product.
+    The rendering engine is used at RUNTIME from the locally installed (licensed) renderer product.
     These compile-time references are NOT redistributed: Private=false keeps them out of our output,
-    and at runtime EngineBridge loads them from the Enscape install directory.
+    and at runtime EngineBridge loads them from the engine install directory.
   -->
   <ItemGroup>
     <Reference Include="Enscape.RendererApi">
-      <HintPath>$(EnscapeDir)\Enscape.RendererApi.dll</HintPath>
+      <HintPath>$(EngineDir)\Enscape.RendererApi.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="GlmSharpStd">
-      <HintPath>$(EnscapeDir)\GlmSharpStd.dll</HintPath>
+      <HintPath>$(EngineDir)\GlmSharpStd.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
 
-  <Target Name="EnsureEnscapeApi" BeforeTargets="ResolveAssemblyReferences" Condition="'$(EnscapeDir)'==''">
-    <Error Text="Enscape.RendererApi.dll not found. Set EnscapeDir property to the Enscape RendererHost directory (default C:\Program Files\Enscape\RendererHost)." Condition="!Exists('C:\Program Files\Enscape\RendererHost\Enscape.RendererApi.dll')" />
+  <Target Name="EnsureEngineApi" BeforeTargets="ResolveAssemblyReferences" Condition="'$(EngineDir)'==''">
+    <Error Text="Enscape.RendererApi.dll not found. Set EngineDir property to the renderer host directory (default C:\Program Files\Enscape\RendererHost)." Condition="!Exists('C:\Program Files\Enscape\RendererHost\Enscape.RendererApi.dll')" />
   </Target>
 </Project>

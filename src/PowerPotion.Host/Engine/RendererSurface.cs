@@ -6,17 +6,17 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 
-namespace PowerPotion.Host.Enscape;
+namespace PowerPotion.Host.Engine;
 
 /// <summary>
-/// Hosts the native Enscape render window inside the WPF visual tree.
+/// Hosts the native engine render window inside the WPF visual tree.
 ///
-/// Mirrors Chaos' own RendererHost (verified against the shipped
-/// <c>Enscape.RendererHost.dll</c>): the engine is started with the *top-level* window handle and the
+/// Mirrors the vendor's own RendererHost (verified against its shipped
+/// host assembly): the engine is started with the *top-level* window handle and the
 /// screen rectangle of the renderer placeholder; the native engine creates its own (top-level) window
 /// there. Once initialization completes the host re-styles that window as a child
-/// (<c>WS_POPUP</c> off / <c>WS_CHILD</c> on — Enscape's <c>ToggleChildWindowStyle</c>) and reparents it
-/// into the WPF HwndHost (Enscape's <c>RendererControl : NativeControlHost</c>). Without the reparent step
+/// (<c>WS_POPUP</c> off / <c>WS_CHILD</c> on — the vendor's <c>ToggleChildWindowStyle</c>) and reparents it
+/// into the WPF HwndHost (the vendor's <c>RendererControl : NativeControlHost</c>). Without the reparent step
 /// the engine window stays a second top-level window floating above the WPF window.
 /// </summary>
 public sealed class RendererSurface : HwndHost
@@ -186,16 +186,16 @@ public sealed class RendererSurface : HwndHost
         try
         {
             // The engine wants the top-level window handle plus the placeholder's *screen* rectangle
-            // (Enscape: RendererWindow.RendererScreenGeometry = placeholder bounds translated to screen).
+            // (vendor host: RendererWindow.RendererScreenGeometry = placeholder bounds translated to screen).
             var window = Window.GetWindow(this);
             var topLevel = window != null ? new WindowInteropHelper(window).Handle : IntPtr.Zero;
             var (_, _, w, h) = GetScreenRect();
 
-            // Create the engine window far off-screen: its own "Enscape" splash/title window would
+            // Create the engine window far off-screen: its vendor-branded splash/title window would
             // otherwise flash over the UI for a second before we reparent it into the surface.
             HostLog.Write($"StartEngine topLevel=0x{topLevel:X} rect=offscreen {w}x{h} doc='{_documentName()}'");
 
-            // The engine ignores the off-screen position on some builds and shows its own "Enscape"
+            // The engine ignores the off-screen position on some builds and shows its vendor-branded splash
             // splash window where the surface is. Hide any native engine window until initialization
             // completes and we reparent it (a background timer keeps hiding it while the UI thread is
             // blocked inside the native start call).
@@ -273,7 +273,7 @@ public sealed class RendererSurface : HwndHost
         try
         {
             // Continuation stays on the UI thread (WPF SynchronizationContext) — the engine's managed
-            // facade must be attached from the windowing thread, like Chaos' host does.
+            // facade must be attached from the windowing thread, like the vendor's host does.
             var result = await _engine.AttachWhenReadyAsync(CancellationToken.None);
             if (global::Enscape.RendererApi.EnscapeAPI.IsError(result))
                 throw new InvalidOperationException($"Engine initialization failed: {result}");
@@ -290,14 +290,14 @@ public sealed class RendererSurface : HwndHost
         }
     }
 
-    /// <summary>Enscape's ToggleChildWindowStyle + NativeControlHost reparenting, in WPF terms.</summary>
+    /// <summary>the vendor's ToggleChildWindowStyle + NativeControlHost reparenting, in WPF terms.</summary>
     private void EmbedEngineWindow()
     {
         var engineWindow = _engine.NativeWindowHandle;
         if (engineWindow == IntPtr.Zero || _hostHwnd == IntPtr.Zero)
             throw new InvalidOperationException("Renderer window handle is not available.");
 
-        // Keep the watchdog running: the engine creates its own "Enscape" splash window during
+        // Keep the watchdog running: the engine creates its vendor-branded splash window during
         // initialization and occasionally again when the first scene is rendered. It must stay
         // hidden until (and after) we reveal the render window ourselves.
 

@@ -1,10 +1,10 @@
-## Reverse Engineer **Chaos Enscape** Revit Plugin
+## Reverse Engineer **Upstream** Revit Plugin
 
-Using REA Reverse Engineer Anything MCP. I want to create a new personalized version of Famous Chaos Enscape Revit Plugin. The goal is to understand the inner workings of the plugin, identify its core functionalities, and then modify or enhance it to suit specific needs.
+Using REA Reverse Engineer Anything MCP. I want to create a new personalized version of Famous Upstream Revit Plugin. The goal is to understand the inner workings of the plugin, identify its core functionalities, and then modify or enhance it to suit specific needs.
 
 The techstack can be simple. Follow what is best suited for Revit. 
 
-I need all the functionalities of Enscape, including real-time rendering, material editing, lighting adjustments, Cloud & Sky rendering, etc
+I need all the functionalities of Upstream, including real-time rendering, material editing, lighting adjustments, Cloud & Sky rendering, etc
 except:
 1. VR Support
 2. Authentication features

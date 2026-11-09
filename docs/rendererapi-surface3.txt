@@ -1,13 +1,14 @@
-=== Enscape.RendererApi.CameraTransitionFlags [enum] ===
+NOTE: vendor names anonymized - 'Upstream' identifiers are the anonymized names of managed types in the rendering engine's managed API assembly (loaded at runtime from C:\Program Files\Enscape\RendererHost).
+=== Upstream.RendererApi.CameraTransitionFlags [enum] ===
     NONE = 0
     SET_FLY_MODE = 1
     FLY_TO_TARGET = 2
     OPTIONAL_FLY_TO_TARGET = 4
     ASSUME_DEFAULT_POSITION = 8
     NO_HOME_POSITION = 16
-=== Enscape.RendererApi.RpcPlacementFlags [enum] ===
+=== Upstream.RendererApi.RpcPlacementFlags [enum] ===
     FIT_AABB = 1
-=== Enscape.RendererApi.ModelRpcParams [struct] ===
+=== Upstream.RendererApi.ModelRpcParams [struct] ===
     field Single[] BbSize
     field Single HeightInFeet
     field RpcPlacementFlags PlacementFlags
@@ -16,35 +17,35 @@
     field Byte[] RpcGuid
     field Boolean IsWhiteMode
     static FromRpcData
-=== Enscape.RendererApi.RendererSettingFlags [enum] ===
+=== Upstream.RendererApi.RendererSettingFlags [enum] ===
     NONE = 0
     HARDWARE_RAYTRACING = 1
     RT_SUN_SHADOWS = 2
     RT_ARTIFICIAL_LIGHTS = 4
     GRASS_CARPET = 8
-=== Enscape.RendererApi.RendererSettings [struct] ===
-=== Enscape.RendererApi.EnscapeAPI+CallbackProcExt [struct] ===
+=== Upstream.RendererApi.RendererSettings [struct] ===
+=== Upstream.RendererApi.UpstreamAPI+CallbackProcExt [struct] ===
     Void Invoke(Int32, System.String)
     System.IAsyncResult BeginInvoke(Int32, System.String, System.AsyncCallback, System.Object)
     Void EndInvoke(System.IAsyncResult)
-=== Enscape.RendererApi.EnscapeAPI+EnscapeCallbackProcProgress [struct] ===
+=== Upstream.RendererApi.UpstreamAPI+UpstreamCallbackProcProgress [struct] ===
     Void Invoke(Single)
     System.IAsyncResult BeginInvoke(Single, System.AsyncCallback, System.Object)
     Void EndInvoke(System.IAsyncResult)
-=== Enscape.RendererApi.EnscapeAPI+EnscapeCallbackDateParamsChange [struct] ===
+=== Upstream.RendererApi.UpstreamAPI+UpstreamCallbackDateParamsChange [struct] ===
     Void Invoke(TimeData)
     System.IAsyncResult BeginInvoke(TimeData, System.AsyncCallback, System.Object)
     Void EndInvoke(System.IAsyncResult)
-=== Enscape.RendererApi.EnscapeAPI+LightDistribution [enum] ===
+=== Upstream.RendererApi.UpstreamAPI+LightDistribution [enum] ===
     SPHERICAL = 1
     HEMISPHERICAL = 2
     SPOT = 3
-=== Enscape.RendererApi.EnscapeAPI+LightShape [enum] ===
+=== Upstream.RendererApi.UpstreamAPI+LightShape [enum] ===
     POINT = 1
     LINE = 2
     RECT = 3
     CIRCLE = 4
-=== Enscape.RendererApi.EnscapeAPI+SoundSourceParams [struct] ===
+=== Upstream.RendererApi.UpstreamAPI+SoundSourceParams [struct] ===
     field Int32 id
     field String file
     field Single x
@@ -53,11 +54,11 @@
     field UInt32 maxVol
     field Single minDist
     field Single maxDist
-=== Enscape.RendererApi.EnscapeAPI+SunMode [enum] ===
+=== Upstream.RendererApi.UpstreamAPI+SunMode [enum] ===
     DATE = 0
     VECTOR = 1
     UNDEFINED = -1
-=== Enscape.RendererApi.EnscapeAPI+CameraFlags [enum] ===
+=== Upstream.RendererApi.UpstreamAPI+CameraFlags [enum] ===
     POSITION = 1
     ORIENTATION = 2
     FOV = 4
@@ -71,19 +72,19 @@
     PROJECTION_TYPE = 1024
     ORTHO_WINDOW = 2048
     GLOBAL_BBOX_VIEW = 4096
-=== Enscape.RendererApi.EnscapeAPI+FovType [enum] ===
+=== Upstream.RendererApi.UpstreamAPI+FovType [enum] ===
     HORIZONTAL = 0
     VERTICAL = 1
-=== Enscape.RendererApi.EnscapeAPI+ProjectionType [enum] ===
+=== Upstream.RendererApi.UpstreamAPI+ProjectionType [enum] ===
     PERSPECTIVE = 0
     ORTHO = 1
-=== Enscape.RendererApi.EnscapeAPI+GlobalBBoxView [enum] ===
+=== Upstream.RendererApi.UpstreamAPI+GlobalBBoxView [enum] ===
     BACK = 0
     RIGHT = 1
     FRONT = 2
     LEFT = 3
     TOP = 4
-=== Enscape.RendererApi.EnscapeAPI+CameraParams [struct] ===
+=== Upstream.RendererApi.UpstreamAPI+CameraParams [struct] ===
     field CameraFlags <ActiveFields>k__BackingField
     field vec3 position
     field quat orientation
@@ -99,7 +100,7 @@
     field ProjectionType projectionType
     field vec4 orthoWindow
     field GlobalBBoxView globalBBoxView
-=== Enscape.RendererApi.TextureSlotParams+SlotSource [enum] ===
+=== Upstream.RendererApi.TextureSlotParams+SlotSource [enum] ===
     TEXTURE_SLOT_SOURCE_DEFAULT = 0
     FROM_RGB = 1
     FROM_RGBA = 2
@@ -108,7 +109,7 @@
     FROM_B = 5
     FROM_A = 6
     TEXTURE_SLOT_SOURCE_COUNT = 7
-=== Enscape.RendererApi.TextureSlotParams+WcsType [enum] ===
+=== Upstream.RendererApi.TextureSlotParams+WcsType [enum] ===
     NONE = 0
     PLANAR = 1
     BOX = 2
