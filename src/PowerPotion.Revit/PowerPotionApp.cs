@@ -127,7 +127,7 @@ public sealed class PowerPotionApp : IExternalApplication
             "Edit PowerPotion material overrides for the current document.", "material");
 
         AddButton(panelTools, new PushButtonData(
-            "PowerPotionSun", "Sun &&\nLocation", assemblyPath,
+            "PowerPotionSun", "Sun &\nLocation", assemblyPath,
             typeof(SunCommand).FullName),
             "Re-push sun, date and location to the renderer.", "sun");
 
