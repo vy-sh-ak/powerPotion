@@ -260,6 +260,7 @@ public sealed class VulkanSurface : HwndHost, IRenderSurface
     public void ApplyCamera(CameraUpdate camera) => _commands.Enqueue(renderer => renderer.ApplyCamera(camera));
     public void OverwriteMaterial(MaterialDto material) => _commands.Enqueue(renderer => renderer.OverwriteMaterial(material));
     public void ApplySun(SunUpdate sun) => _commands.Enqueue(renderer => renderer.ApplySun(sun));
+    public void SetSectionPlanes(float[] planes) => _commands.Enqueue(renderer => renderer.SetSectionPlanes(planes));
 
     public string SceneStats { get { lock (_stateLock) return _renderer?.SceneStats ?? "no renderer"; } }
     public int SceneDrawCalls { get { lock (_stateLock) return _renderer?.SceneDrawCalls ?? 0; } }

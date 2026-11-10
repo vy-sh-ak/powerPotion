@@ -53,6 +53,7 @@ public interface IRenderSurface
     void ApplyCamera(CameraUpdate camera);
     void OverwriteMaterial(MaterialDto material);
     void ApplySun(SunUpdate sun);
+    void SetSectionPlanes(float[] planes);
     event Action<long>? SceneUploaded;
     void Stop();
 }

@@ -69,7 +69,14 @@ public sealed class RendererBridge : IRendererBridge
             Log?.Invoke($"camera stream: {_cameraUpdateCount} updates");
     }
     public CameraUpdate? ReadCamera() => _camera;
-    public void SetSectionPlanes(float[] planes) => _ = planes;
+
+    private float[] _sectionPlanes = Array.Empty<float>();
+    public void SetSectionPlanes(float[] planes)
+    {
+        _sectionPlanes = planes ?? Array.Empty<float>();
+        _surface?.SetSectionPlanes(_sectionPlanes);
+        Log?.Invoke($"P4 bridge: {_sectionPlanes.Length / 4} section plane(s).");
+    }
 
     public void ExecuteConsoleCommand(string command, bool deferred)
     {

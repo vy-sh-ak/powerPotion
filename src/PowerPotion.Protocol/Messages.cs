@@ -38,6 +38,8 @@ public enum MessageType : ushort
     Shutdown = 13,
     /// <summary>Host → plugin: engine started, world may be pushed.</summary>
     EngineReady = 14,
+    /// <summary>Plugin → host: active section/clip planes (xyzd, up to 8).</summary>
+    SectionPlanesUpdate = 15,
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +60,12 @@ public sealed class EngineReady
 {
     public bool Started;
     public string Error = "";
+}
+
+/// <summary>Plugin → host: active section/clip planes. Each plane is xyzd (normal.xyz, distance), up to 8.</summary>
+public sealed class SectionPlanesUpdate
+{
+    public float[] Planes = Array.Empty<float>();
 }
 
 public sealed class TextureSlotDto

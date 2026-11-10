@@ -324,6 +324,8 @@ public partial class MainWindow : Window
                 _engine.ApplySun(view.Sun);
                 SetStatus($"View: {view.Name}");
             };
+            _connection.SectionPlanesReceived += planes =>
+                Dispatcher.Invoke(() => _engine.SetSectionPlanes(planes.Planes));
             _connection.Disconnected += () => Dispatcher.Invoke(() =>
             {
                 SetStatus("Disconnected from Revit.");

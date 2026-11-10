@@ -16,18 +16,21 @@ internal struct SceneVertex
 
 internal sealed class GpuModel
 {
-    public GpuModel(int id, BufferAllocation vertex, BufferAllocation index, MaterialIndexGroupDto[] groups)
+    public GpuModel(int id, BufferAllocation vertex, BufferAllocation index, MaterialIndexGroupDto[] groups,
+        Vec3 center)
     {
         Id = id;
         Vertex = vertex;
         Index = index;
         Groups = groups;
+        Center = center;
     }
 
     public int Id { get; }
     public BufferAllocation Vertex { get; }
     public BufferAllocation Index { get; }
     public MaterialIndexGroupDto[] Groups { get; }
+    public Vec3 Center { get; }
 
     public void Dispose()
     {
@@ -39,7 +42,8 @@ internal sealed class GpuModel
 internal readonly struct SceneDraw
 {
     public SceneDraw(int modelIndex, float[] matrix, uint startIndex, uint indexCount,
-        int frontMaterial, int backMaterial, bool doubleSided, bool transparent, float distance)
+        int frontMaterial, int backMaterial, bool doubleSided, bool transparent, float distance,
+        Vec3 center)
     {
         ModelIndex = modelIndex;
         Matrix = matrix;
@@ -50,6 +54,7 @@ internal readonly struct SceneDraw
         DoubleSided = doubleSided;
         Transparent = transparent;
         Distance = distance;
+        Center = center;
     }
 
     public int ModelIndex { get; }
@@ -61,6 +66,7 @@ internal readonly struct SceneDraw
     public bool DoubleSided { get; }
     public bool Transparent { get; }
     public float Distance { get; }
+    public Vec3 Center { get; }
 }
 
 /// <summary>GPU scene: uploads CPU-built scene data and builds the material-group draw list.</summary>
@@ -105,7 +111,26 @@ internal sealed unsafe class GpuScene : IDisposable
                 $"model {upload.Id} indices");
             allocator.UploadBuffer(indexBuffer, MemoryMarshal.AsBytes(upload.Indices.AsSpan()));
 
-            _models.Add(new GpuModel(upload.Id, vertexBuffer, indexBuffer, upload.Groups));
+            var (center, modelMin, modelMax) = BoundsOf(upload.Vertices);
+            if (!_hasBounds)
+            {
+                BoundsMin = modelMin;
+                BoundsMax = modelMax;
+                _hasBounds = true;
+            }
+            else
+            {
+                BoundsMin = new Vec3(
+                    MathF.Min(BoundsMin.X, modelMin.X),
+                    MathF.Min(BoundsMin.Y, modelMin.Y),
+                    MathF.Min(BoundsMin.Z, modelMin.Z));
+                BoundsMax = new Vec3(
+                    MathF.Max(BoundsMax.X, modelMax.X),
+                    MathF.Max(BoundsMax.Y, modelMax.Y),
+                    MathF.Max(BoundsMax.Z, modelMax.Z));
+            }
+
+            _models.Add(new GpuModel(upload.Id, vertexBuffer, indexBuffer, upload.Groups, center));
             VertexBytes += (ulong)(upload.Vertices.Length * sizeof(SceneVertex));
             IndexBytes += (ulong)(upload.Indices.Length * sizeof(uint));
         }

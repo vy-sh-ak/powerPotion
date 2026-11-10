@@ -70,6 +70,9 @@ public sealed unsafe class VulkanRenderer : IDisposable
     private TextureCache _textures = null!;
     private GpuScene? _scene;
     private readonly CameraState _camera = new();
+    private readonly float[] _sectionPlanes = new float[MaxSectionPlanes * 4];
+    private int _sectionPlaneCount;
+    private const int MaxSectionPlanes = 8;
     private SunUpdate _sun = new();
     private SunInfo _sunInfo = SunPosition.Compute(new SunUpdate(), 1f);
     private RendererSettings _settings = new();
