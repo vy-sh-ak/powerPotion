@@ -37,7 +37,9 @@ P5 closes the post/capture/settings slice of `renderer-plan.md`:
 `Capture/CaptureWriter.cs`, `Capture/ExrWriter.cs`, `Capture/PngWriter.cs`
 
 - `.png` (existing writer), `.jpg`/`.jpeg` via WPF/WIC, `.exr` via a minimal uncompressed
-  scanline float writer (sRGB→linear 2.2).
+  scanline float writer. **EXR captures read back the HDR scene target directly**, so the file
+  is true linear HDR; if the device cannot provide a float scene format the LDR frame is
+  linearised as a fallback.
 - `Capture(path, width, height)` renders at an explicit resolution; `r_captureResolution`
   scales the default window-size capture.
 - Captures use the environment-refraction fallback when the requested size differs from the
@@ -68,7 +70,7 @@ capture scale and safe frame. Unknown keys still log and ignore.
 | Post stack (bloom/saturation/temperature/vignette/CA/motion blur/flare/contrast) | captured, image changed |
 | Safe-frame border | detected at the frame edge |
 | Explicit resolution | captured at 800×450 |
-| JPG + EXR | both written |
+| JPG + EXR | both written; EXR is true HDR float (11.5 MB at 1264×761) |
 | Panorama | captured at 1024×512, non-background 100% |
 | ACES tonemap | HDR scene target + ACES reported in the log |
 | TAA | history/jitter active reported in the log |
@@ -86,5 +88,3 @@ Captures: `docs/p5-base.png`, `docs/p5-exposure.png`, `docs/p5-post.png`,
 - Motion blur is a radial screen-space approximation (no per-object velocity buffer).
 - TAA uses a clamped history blend without motion-vector reprojection; camera motion can show
   minor ghosting on thin geometry.
-- EXR capture writes the tone-mapped LDR frame linearised to float; a true HDR capture path
-  belongs with the P6 HDR pipeline.

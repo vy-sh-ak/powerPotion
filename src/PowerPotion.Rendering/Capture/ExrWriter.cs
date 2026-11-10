@@ -5,7 +5,7 @@ namespace PowerPotion.Rendering.Capture;
 
 /// <summary>
 /// Minimal uncompressed scanline OpenEXR writer (float RGB). No third-party EXR dependency.
-/// The captured LDR frame is linearised (sRGB 2.2) so the file is useful as an HDR source.
+/// Accepts either linear float RGB or BGRA bytes (linearised from sRGB).
 /// </summary>
 internal static class ExrWriter
 {
@@ -15,6 +15,25 @@ internal static class ExrWriter
             throw new ArgumentOutOfRangeException(nameof(width));
         if (bgra.Length < width * height * 4)
             throw new ArgumentException("Pixel buffer is smaller than the image.", nameof(bgra));
+
+        var rgb = new float[width * height * 3];
+        for (int i = 0; i < width * height; i++)
+        {
+            int src = i * 4;
+            rgb[i * 3] = MathF.Pow(bgra[src + 2] / 255f, 2.2f);
+            rgb[i * 3 + 1] = MathF.Pow(bgra[src + 1] / 255f, 2.2f);
+            rgb[i * 3 + 2] = MathF.Pow(bgra[src] / 255f, 2.2f);
+        }
+        WriteFloatRgb(path, width, height, rgb);
+    }
+
+    /// <summary>Writes linear float RGB (3 floats per pixel, R,G,B order).</summary>
+    public static void WriteFloatRgb(string path, int width, int height, ReadOnlySpan<float> rgb)
+    {
+        if (width <= 0 || height <= 0)
+            throw new ArgumentOutOfRangeException(nameof(width));
+        if (rgb.Length < width * height * 3)
+            throw new ArgumentException("Pixel buffer is smaller than the image.", nameof(rgb));
 
         var header = new List<byte>();
         void CString(string value)
@@ -78,21 +97,18 @@ internal static class ExrWriter
         {
             BitConverter.GetBytes(y).CopyTo(scanline, 0);
             BitConverter.GetBytes(width * 3 * 4).CopyTo(scanline, 4);
-            int src = y * width * 4;
             int dst = 8;
             for (int channel = 0; channel < 3; channel++)
             {
-                int offset = channel == 0 ? 0 : channel == 1 ? 1 : 2; // B, G, R
+                int offset = channel == 0 ? 2 : channel == 1 ? 1 : 0; // B, G, R
                 for (int x = 0; x < width; x++)
                 {
-                    float value = bgra[src + x * 4 + offset] / 255f;
-                    value = MathF.Pow(value, 2.2f);
-                    BitConverter.GetBytes(value).CopyTo(scanline, dst);
+                    int i = (y * width + x) * 3 + offset;
+                    BitConverter.GetBytes(rgb[i]).CopyTo(scanline, dst);
                     dst += 4;
                 }
             }
             stream.Write(scanline);
-            src += width * 4;
         }
     }
 }

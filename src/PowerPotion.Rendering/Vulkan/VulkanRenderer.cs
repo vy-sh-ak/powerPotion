@@ -1696,6 +1696,8 @@ public sealed unsafe class VulkanRenderer : IDisposable
         return result;
     }
 
+    private static float HalfToFloat(ushort value) => (float)BitConverter.UInt16BitsToHalf(value);
+
     private void DrawSceneItem(CommandBuffer commandBuffer, SceneDraw draw, bool screenRefraction)
     {
         var model = _scene!.Models[draw.ModelIndex];
@@ -1770,11 +1772,17 @@ public sealed unsafe class VulkanRenderer : IDisposable
             _renderPass, colorTransient.View, depthTransient.View, width, height);
         Framebuffer transparentFramebuffer = CreateCaptureFramebuffer(
             _transparentRenderPass, colorTransient.View, depthTransient.View, width, height);
-        Framebuffer postFramebuffer = _post.CreateFramebuffer(postTransient.View, width, height);
+        Framebuffer postFramebuffer = default;
+        bool hdrExr = string.Equals(Path.GetExtension(path), ".exr", StringComparison.OrdinalIgnoreCase)
+                      && _sceneColorFormat == Format.R16G16B16A16Sfloat;
+        if (!hdrExr)
+            postFramebuffer = _post.CreateFramebuffer(postTransient.View, width, height);
 
         _camera.SetAspect(width, height);
 
-        ulong bufferSize = (ulong)width * height * 4;
+        ulong bufferSize = hdrExr
+            ? (ulong)width * height * 8
+            : (ulong)width * height * 4;
         var readbackAllocation = _allocator.CreateBuffer(bufferSize, BufferUsageFlags.TransferDstBit,
             MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, "capture readback");
 
@@ -1810,61 +1818,109 @@ public sealed unsafe class VulkanRenderer : IDisposable
         _frameGraph.AddPass("capture-transparent",
             cmd => RecordRenderPass(cmd, transparentFramebuffer, extent, transparent: true));
 
-        _frameGraph.AddPass("capture-post",
-            cmd =>
-            {
-                _post.Update(_currentFrame, colorTransient.View, _taaHistoryView, BuildPostParams(immediate: true));
-                _post.Record(cmd, _currentFrame, postFramebuffer, extent);
-            },
-            new ImageTransition(colorTransient.Allocation.Image,
-                ImageLayout.ColorAttachmentOptimal, ImageLayout.ShaderReadOnlyOptimal,
-                PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.FragmentShaderBit,
-                AccessFlags.ColorAttachmentWriteBit, AccessFlags.ShaderReadBit,
-                ImageAspectFlags.ColorBit),
-            new ImageTransition(postTransient.Allocation.Image,
-                ImageLayout.Undefined, ImageLayout.ColorAttachmentOptimal,
-                PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.ColorAttachmentOutputBit,
-                0, AccessFlags.ColorAttachmentWriteBit,
-                ImageAspectFlags.ColorBit));
-
-        _frameGraph.AddPass("capture-copy",
-            cmd =>
-            {
-                var copy = new BufferImageCopy
+        if (hdrExr)
+        {
+            _frameGraph.AddPass("capture-hdr-copy",
+                cmd =>
                 {
-                    BufferOffset = 0,
-                    BufferRowLength = 0,
-                    BufferImageHeight = 0,
-                    ImageSubresource = new ImageSubresourceLayers
+                    var copy = new BufferImageCopy
                     {
-                        AspectMask = ImageAspectFlags.ColorBit,
-                        MipLevel = 0,
-                        BaseArrayLayer = 0,
-                        LayerCount = 1,
-                    },
-                    ImageOffset = new Offset3D { X = 0, Y = 0, Z = 0 },
-                    ImageExtent = new Extent3D { Width = width, Height = height, Depth = 1 },
-                };
-                _vk.CmdCopyImageToBuffer(cmd, postTransient.Allocation.Image,
-                    ImageLayout.TransferSrcOptimal, readbackAllocation.Buffer, 1, &copy);
-            },
-            new ImageTransition(postTransient.Allocation.Image,
-                ImageLayout.ColorAttachmentOptimal, ImageLayout.TransferSrcOptimal,
-                PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.TransferBit,
-                AccessFlags.ColorAttachmentWriteBit, AccessFlags.TransferReadBit,
-                ImageAspectFlags.ColorBit));
+                        BufferOffset = 0,
+                        BufferRowLength = 0,
+                        BufferImageHeight = 0,
+                        ImageSubresource = new ImageSubresourceLayers
+                        {
+                            AspectMask = ImageAspectFlags.ColorBit,
+                            MipLevel = 0,
+                            BaseArrayLayer = 0,
+                            LayerCount = 1,
+                        },
+                        ImageOffset = new Offset3D { X = 0, Y = 0, Z = 0 },
+                        ImageExtent = new Extent3D { Width = width, Height = height, Depth = 1 },
+                    };
+                    _vk.CmdCopyImageToBuffer(cmd, colorTransient.Allocation.Image,
+                        ImageLayout.TransferSrcOptimal, readbackAllocation.Buffer, 1, &copy);
+                },
+                new ImageTransition(colorTransient.Allocation.Image,
+                    ImageLayout.ColorAttachmentOptimal, ImageLayout.TransferSrcOptimal,
+                    PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.TransferBit,
+                    AccessFlags.ColorAttachmentWriteBit, AccessFlags.TransferReadBit,
+                    ImageAspectFlags.ColorBit));
+        }
+        else
+        {
+            _frameGraph.AddPass("capture-post",
+                cmd =>
+                {
+                    _post.Update(_currentFrame, colorTransient.View, _taaHistoryView, BuildPostParams(immediate: true));
+                    _post.Record(cmd, _currentFrame, postFramebuffer, extent);
+                },
+                new ImageTransition(colorTransient.Allocation.Image,
+                    ImageLayout.ColorAttachmentOptimal, ImageLayout.ShaderReadOnlyOptimal,
+                    PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.FragmentShaderBit,
+                    AccessFlags.ColorAttachmentWriteBit, AccessFlags.ShaderReadBit,
+                    ImageAspectFlags.ColorBit),
+                new ImageTransition(postTransient.Allocation.Image,
+                    ImageLayout.Undefined, ImageLayout.ColorAttachmentOptimal,
+                    PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.ColorAttachmentOutputBit,
+                    0, AccessFlags.ColorAttachmentWriteBit,
+                    ImageAspectFlags.ColorBit));
+
+            _frameGraph.AddPass("capture-copy",
+                cmd =>
+                {
+                    var copy = new BufferImageCopy
+                    {
+                        BufferOffset = 0,
+                        BufferRowLength = 0,
+                        BufferImageHeight = 0,
+                        ImageSubresource = new ImageSubresourceLayers
+                        {
+                            AspectMask = ImageAspectFlags.ColorBit,
+                            MipLevel = 0,
+                            BaseArrayLayer = 0,
+                            LayerCount = 1,
+                        },
+                        ImageOffset = new Offset3D { X = 0, Y = 0, Z = 0 },
+                        ImageExtent = new Extent3D { Width = width, Height = height, Depth = 1 },
+                    };
+                    _vk.CmdCopyImageToBuffer(cmd, postTransient.Allocation.Image,
+                        ImageLayout.TransferSrcOptimal, readbackAllocation.Buffer, 1, &copy);
+                },
+                new ImageTransition(postTransient.Allocation.Image,
+                    ImageLayout.ColorAttachmentOptimal, ImageLayout.TransferSrcOptimal,
+                    PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.TransferBit,
+                    AccessFlags.ColorAttachmentWriteBit, AccessFlags.TransferReadBit,
+                    ImageAspectFlags.ColorBit));
+        }
 
         _frameGraph.Execute(commandBuffer);
         EndSingleTimeCommands(commandBuffer);
 
-        var pixels = new byte[bufferSize];
-        Marshal.Copy(readbackAllocation.Mapped, pixels, 0, pixels.Length);
-
-        CaptureWriter.Write(path, (int)width, (int)height, pixels);
+        if (hdrExr)
+        {
+            var halfPixels = new byte[(int)bufferSize];
+            Marshal.Copy(readbackAllocation.Mapped, halfPixels, 0, halfPixels.Length);
+            var rgb = new float[width * height * 3];
+            for (int i = 0; i < width * height; i++)
+            {
+                int o = i * 8;
+                rgb[i * 3] = HalfToFloat(BitConverter.ToUInt16(halfPixels, o));
+                rgb[i * 3 + 1] = HalfToFloat(BitConverter.ToUInt16(halfPixels, o + 2));
+                rgb[i * 3 + 2] = HalfToFloat(BitConverter.ToUInt16(halfPixels, o + 4));
+            }
+            ExrWriter.WriteFloatRgb(path, (int)width, (int)height, rgb);
+        }
+        else
+        {
+            var pixels = new byte[(int)bufferSize];
+            Marshal.Copy(readbackAllocation.Mapped, pixels, 0, pixels.Length);
+            CaptureWriter.Write(path, (int)width, (int)height, pixels);
+        }
 
         _vk.DestroyFramebuffer(_device, opaqueFramebuffer, null);
         _vk.DestroyFramebuffer(_device, transparentFramebuffer, null);
-        _vk.DestroyFramebuffer(_device, postFramebuffer, null);
+        if (postFramebuffer.Handle != 0) _vk.DestroyFramebuffer(_device, postFramebuffer, null);
         readbackAllocation.Destroy(immediate: true);
         _allocator.CollectGarbage(0);
         _camera.SetAspect(_swapchainExtent.Width, _swapchainExtent.Height);

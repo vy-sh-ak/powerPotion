@@ -102,8 +102,10 @@ public static class P5Spike
                 bool capturedJpg = await surface.CaptureAsync(jpgPath);
                 bool capturedExr = await surface.CaptureAsync(exrPath);
                 bool jpgOk = capturedJpg && File.Exists(jpgPath) && new FileInfo(jpgPath).Length > 1000;
-                bool exrOk = capturedExr && File.Exists(exrPath) && new FileInfo(exrPath).Length > 1000;
-                Console.WriteLine($"P5 formats: jpg={jpgOk} exr={exrOk}");
+                bool exrOk = capturedExr && File.Exists(exrPath) &&
+                             new FileInfo(exrPath).Length > (long)baseline.Width * baseline.Height * 8;
+                Console.WriteLine($"P5 formats: jpg={jpgOk} exr={exrOk} " +
+                                  $"exrBytes={(File.Exists(exrPath) ? new FileInfo(exrPath).Length : 0)}");
 
                 // Panorama.
                 var panoPath = Variant("pano");
