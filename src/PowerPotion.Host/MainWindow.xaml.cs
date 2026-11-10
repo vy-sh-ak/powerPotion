@@ -21,7 +21,6 @@ public partial class MainWindow : Window
     private HostConnection? _connection;
     private VulkanSurface? _vulkanSurface;
     private readonly List<MaterialDto> _materials = new();
-    private MaterialDto? _selectedMaterial;
     private bool _sidebarIsMaterials;
     private bool _suppressPanelEvents;
     private bool _engineReady;
@@ -277,14 +276,8 @@ public partial class MainWindow : Window
 
         _engine.Log += m =>
         {
-            // Engine diagnostics stay in the log; the status bar must never surface engine-branded
-            // text/paths (e.g. the installed Enscape directory).
-            HostLog.Write("engine: " + m);
-        };
-        _engine.ClosedFromEngine += () =>
-        {
-            HostLog.Write("Engine closed from engine callback");
-            Dispatcher.BeginInvoke(DispatcherPriority.Normal, new Action(OnEngineClosed));
+            // Renderer diagnostics go to the host log only; the status bar shows concise messages.
+            HostLog.Write("renderer: " + m);
         };
         _engine.CaptureFinished += ok => Dispatcher.Invoke(() => SetStatus(ok ? "Capture saved." : "Capture failed."));
 
@@ -314,7 +307,7 @@ public partial class MainWindow : Window
                 SetStatus("Disconnected from Revit.");
                 _connection = null;
                 // The renderer host is a child of the Revit session: do not leave an orphan window
-                // behind when Revit closes/crashes (Enscape's host behaves the same way).
+                // behind when Revit closes/crashes.
                 if (_connectedToRevit) Close();
             });
         }
@@ -467,14 +460,6 @@ public partial class MainWindow : Window
             _ = _connection.SendCaptureResultAsync(new CaptureResult { Ok = true, FilePath = path });
         }
         SetStatus($"Capturing to {Path.GetFileName(path)}…");
-    }
-
-    private void OnEngineClosed()
-    {
-        SetStatus("Renderer closed.");
-        if (_connection != null) _ = _connection.SendRendererClosedAsync("engine-closed");
-        _ = _connection?.SendRendererClosedAsync("engine-closed");
-        _connection = null;
     }
 
     private void SetStatus(string text) => StatusText.Text = text;

@@ -4,11 +4,6 @@ using PowerPotion.Protocol;
 
 namespace PowerPotion.Revit.Export;
 
-/// <summary>
-/// Parses Revit's "Generic Photometric Light" rendering asset from a CustomExporter LightNode —
-/// the exact property set Enscape reads (docs/rea-report-revit-plugin.md §3): shape, distribution,
-/// IES profile, color temperature / filter color, and intensity with its unit.
-/// </summary>
 public static class LightParser
 {
     public static LightDto? Parse(Document doc, LightNode node)

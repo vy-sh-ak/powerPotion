@@ -7,7 +7,7 @@ namespace PowerPotion.Host.Rendering;
 
 /// <summary>
 /// P0 spike window: the same WPF layout seam as the real host (a Grid holding an HwndHost),
-/// but with the standalone Vulkan renderer instead of Enscape.
+/// hosting the standalone Vulkan renderer.
 /// </summary>
 public sealed class P0Window : Window
 {

@@ -3,11 +3,6 @@ using PowerPotion.Protocol;
 
 namespace PowerPotion.Revit.Export;
 
-/// <summary>
-/// Converts a view's SunAndShadowSettings + the project location into a protocol SunUpdate —
-/// Enscape's SunAndLocationParser behavior (docs/rea-report-revit-plugin.md §4):
-/// place-and-time mode (lat/long/timezone/date) or explicit sun vector, plus true-north angle.
-/// </summary>
 public static class SunParser
 {
     public static SunUpdate? Parse(Document doc, ElementId viewId)

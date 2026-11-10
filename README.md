@@ -21,6 +21,7 @@ power-potion/
 ├── assets/branding/               # logo (SVG/PNG/ICO), ribbon icons, installer art
 ├── docs/                          # historical REA notes + per-phase reports
 │   ├── ARCHITECTURE.md            # architecture + historical Enscape mapping notes
+│   ├── NOT-IMPLEMENTED.md         # deferred features, approximations and inert settings
 │   ├── p4-report.md … p6-report.md
 │   └── rea-report-*.md            # historical analysis (no longer used by the product)
 ├── src/
@@ -93,6 +94,9 @@ each `src/*/bin/Release`.
 
 Historical architecture notes and the empirical calibration evidence remain in
 `docs/ARCHITECTURE.md`; they describe the studied product, not a runtime dependency.
+
+For the current list of deferred features, approximations and settings that are accepted but have
+no effect, see **`docs/NOT-IMPLEMENTED.md`**.
 
 ## Branding
 

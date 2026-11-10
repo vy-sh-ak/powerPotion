@@ -5,9 +5,8 @@ using System.Text;
 namespace PowerPotion.Host;
 
 /// <summary>
-/// Lightweight host-side diagnostics: a single append-only text log next to the engine log.
-/// Records managed exceptions (including WPF dispatcher exceptions) and tagged engine events
-/// so a failure can be correlated with the native engine log.
+/// Lightweight host-side diagnostics: a single append-only text log for the host process.
+/// Records managed exceptions (including WPF dispatcher exceptions) and tagged renderer events.
 /// </summary>
 public static class HostLog
 {

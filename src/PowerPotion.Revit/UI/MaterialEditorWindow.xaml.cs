@@ -74,7 +74,7 @@ public partial class MaterialEditorWindow : System.Windows.Window
         Blue.Value = dto.DiffuseB;
         Roughness.Value = dto.Roughness;
         Metallic.Value = dto.Metallic;
-        Opacity.Value = dto.Opacity;
+        OpacitySlider.Value = dto.Opacity;
         Emissive.Value = dto.EmissiveStrength;
         TexturePath.Text = dto.DiffuseTexture.File;
         _suppress = false;
@@ -88,7 +88,7 @@ public partial class MaterialEditorWindow : System.Windows.Window
         _current.DiffuseB = (float)Blue.Value;
         _current.Roughness = (float)Roughness.Value;
         _current.Metallic = (float)Metallic.Value;
-        _current.Opacity = (float)Opacity.Value;
+        _current.Opacity = (float)OpacitySlider.Value;
         _current.EmissiveStrength = (float)Emissive.Value;
     }
 
@@ -121,7 +121,7 @@ public partial class MaterialEditorWindow : System.Windows.Window
 
             material.Color = new Color(
                 (byte)(Red.Value * 255), (byte)(Green.Value * 255), (byte)(Blue.Value * 255));
-            material.Transparency = (byte)Math.Round((1.0 - Opacity.Value) * 100.0);
+            material.Transparency = (byte)Math.Round((1.0 - OpacitySlider.Value) * 100.0);
 
             var assetId = material.AppearanceAssetId;
             if (assetId != ElementId.InvalidElementId)
@@ -131,7 +131,7 @@ public partial class MaterialEditorWindow : System.Windows.Window
 
                 AssignColor(editableAsset, "generic_diffuse", Red.Value, Green.Value, Blue.Value);
                 AssignDouble(editableAsset, "generic_glossiness", Math.Clamp(1.0 - Roughness.Value, 0.01, 1.0));
-                AssignDouble(editableAsset, "generic_transparency", Math.Clamp(1.0 - Opacity.Value, 0.0, 0.98));
+                AssignDouble(editableAsset, "generic_transparency", Math.Clamp(1.0 - OpacitySlider.Value, 0.0, 0.98));
                 AssignBoolean(editableAsset, "generic_is_metal", Metallic.Value > 0.5);
 
                 editScope.Commit(true);

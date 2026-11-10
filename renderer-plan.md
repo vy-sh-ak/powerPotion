@@ -45,6 +45,10 @@ ray-traced shadows/reflections and art modes remain follow-ups; see `docs/p6-rep
 Vulkan renderer; build/installer/README/architecture docs are updated; `tests/no-enscape.ps1` is
 the CI guard. Clean-machine installer testing remains a manual release check.
 
+> **Deferred work and approximations** are tracked in `docs/NOT-IMPLEMENTED.md` (P6 long-tail,
+> MVP gaps such as `g_sunVec` and rect/line area lights, `sys_spec` presets, golden/perf tests,
+> and the settings that are accepted but have no effect).
+
 ---
 
 ## 1. Confirmed decisions

@@ -4,31 +4,24 @@ using PowerPotion.Rendering.Settings;
 namespace PowerPotion.Rendering;
 
 /// <summary>
-/// Adapter between the existing host seam and the standalone Vulkan renderer. The render surface
-/// owns the Vulkan device/swapchain; this class keeps the same public shape as the old Enscape
-/// bridge so <c>MainWindow</c> and <c>NavigationController</c> need almost no changes.
-///
-/// P1 wires swapchain options; P2 applies worlds/materials/camera; P3 maps the CVar surface into
-/// <see cref="Settings.RendererSettings"/> and forwards sun/sky/shadow/light controls.
+/// Adapter between the host seam and the standalone Vulkan renderer. The render surface owns the
+/// Vulkan device/swapchain; this class forwards worlds/materials/camera and maps the CVar surface
+/// into <see cref="Settings.RendererSettings"/>.
 /// </summary>
 public sealed class RendererBridge : IRendererBridge
 {
     private IRenderSurface? _surface;
-    private WorldSnapshot? _lastWorld;
     private CameraUpdate? _camera;
     private readonly RendererSettings _settings = new();
-    private TaskCompletionSource<bool>? _captureCompletion;
     private int _cameraUpdateCount;
     private bool _disposed;
 
-    public bool IsRunning => _surface?.IsReady == true;
     public string EngineVersion => "PowerPotion Vulkan P0" +
         (string.IsNullOrEmpty(_surface?.DeviceName) ? "" : " / " + _surface!.DeviceName);
     public IntPtr NativeWindowHandle => _surface?.ChildHwnd ?? IntPtr.Zero;
     public List<string> PreInitCommands { get; } = new();
 
     public event Action<string>? Log;
-    public event Action? ClosedFromEngine;
     public event Action<bool>? CaptureFinished;
     public event Action<int>? WorldUpdateFinished;
 
@@ -46,7 +39,6 @@ public sealed class RendererBridge : IRendererBridge
 
     public void ApplyWorld(WorldSnapshot world, bool applyCamera = true)
     {
-        _lastWorld = world;
         if (applyCamera) _camera = world.Camera;
         _surface?.ApplyWorld(world, applyCamera);
         Log?.Invoke($"P2 bridge: world queued ({world.Models.Count} models, {world.Materials.Count} materials, " +
@@ -107,15 +99,8 @@ public sealed class RendererBridge : IRendererBridge
         Log?.Invoke($"P3 bridge: unknown console command '{command}' (deferred={deferred}) ignored.");
     }
 
-    public void WaitForIdle() { }
-    public void WaitForFrames(ulong frames) => _ = frames;
-
-    public Task<bool> CaptureDone =>
-        (_captureCompletion ??= new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
-
     public void CaptureScreenshot(string filePath, bool panorama, int width = 0, int height = 0)
     {
-        _captureCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _ = CaptureAsync(filePath, panorama, width, height);
     }
 
@@ -126,7 +111,7 @@ public sealed class RendererBridge : IRendererBridge
         {
             if (_surface == null)
             {
-                Log?.Invoke("P0 capture failed: no surface attached.");
+                Log?.Invoke("capture failed: no surface attached.");
             }
             else
             {
@@ -137,21 +122,13 @@ public sealed class RendererBridge : IRendererBridge
         }
         catch (Exception ex)
         {
-            Log?.Invoke("P0 capture failed: " + ex.Message);
+            Log?.Invoke("capture failed: " + ex.Message);
         }
 
-        _captureCompletion?.TrySetResult(ok);
         CaptureFinished?.Invoke(ok);
     }
 
-    public Task StopAsync()
-    {
-        _surface?.Stop();
-        return Task.CompletedTask;
-    }
-
     public void NotifyFocus(bool focused) => _ = focused;
-    public void NotifyMinimize(bool minimized) => _ = minimized;
     public void FocusRenderWindow() => _surface?.FocusChild();
 
     public void Dispose()

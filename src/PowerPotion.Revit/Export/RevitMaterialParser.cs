@@ -6,12 +6,6 @@ using static PowerPotion.Revit.Export.LightParser;
 
 namespace PowerPotion.Revit.Export;
 
-/// <summary>
-/// Converts Revit materials into protocol MaterialDto: graphics fallback (color/transparency)
-/// plus appearance assets (generic + common Revit schemas, textures, bump, self-illumination)
-/// and name-keyword material typing — mirroring Enscape's MaterialParser/AssetFinder pipeline
-/// (docs/rea-report-revit-plugin.md §5).
-/// </summary>
 public sealed class RevitMaterialParser
 {
     private readonly Dictionary<ElementId, MaterialDto> _cache = new();
@@ -30,12 +24,6 @@ public sealed class RevitMaterialParser
         _doc = doc;
         _textureSearchPaths = new List<string>(extraTexturePaths ?? Array.Empty<string>());
     }
-
-    /// <summary>
-    /// Material for one exported face. Uses the face's effective appearance asset when the face has a
-    /// paint/view override, otherwise the document material (Enscape's MaterialSourceSelector does the
-    /// same via MaterialNode.HasOverriddenAppearance / GetAppearanceOverride).
-    /// </summary>
     public MaterialDto? GetOrParse(MaterialNode node)
     {
         var dto = GetOrParse(node.MaterialId);
@@ -141,12 +129,6 @@ public sealed class RevitMaterialParser
         return result;
     }
 
-    /// <summary>
-    /// Schema → albedo property, from Enscape's MaterialParser literals (REA evidence:
-    /// Enscape.Revit.Plugin.Materials.MaterialParser #US). The grouped bitmap for a Revit material is
-    /// connected to this property, not always to generic_diffuse — this is why e.g. a MasonryCMU roof
-    /// used to lose its terracotta texture and fall back to white.
-    /// </summary>
     private static string AlbedoProperty(string schema) => schema switch
     {
         "CeramicSchema" => "ceramic_color",

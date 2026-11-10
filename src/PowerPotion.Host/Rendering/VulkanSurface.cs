@@ -12,7 +12,7 @@ namespace PowerPotion.Host.Rendering;
 
 /// <summary>
 /// WPF <see cref="HwndHost"/> that owns a child HWND and hosts the standalone Vulkan renderer.
-/// This replaces the Enscape "start offscreen then reparent" dance with a direct child surface.
+/// The renderer draws directly into the child surface; there is no offscreen window to reparent.
 /// </summary>
 public sealed class VulkanSurface : HwndHost, IRenderSurface
 {

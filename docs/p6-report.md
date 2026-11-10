@@ -81,6 +81,8 @@ Regressions (all with validation enabled):
 
 ## Not yet implemented (P6 follow-ups)
 
+Tracked with the rest of the deferred work in `docs/NOT-IMPLEMENTED.md`.
+
 - DDGI probe grid and OIDN/custom temporal denoise (SSGI + a depth-weighted gather are in place).
 - FSR 2/3 temporal upscaling (the render-scale + spatial upscale path is in place; `r_dlss` is
   the compatibility toggle).

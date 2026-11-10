@@ -3,9 +3,9 @@ setlocal
 setlocal enabledelayedexpansion
 
 :: ---------------------------------------------------------------------------
-:: PowerPotion — full build script
-:: Compiles the protocol library, renderer host and Revit add-in (Release),
-:: then builds the installer with Inno Setup if available.
+:: PowerPotion - full build script
+:: Compiles the solution (protocol library, renderer, host, Revit add-in, tests, tools)
+:: in Release, then builds the installer with Inno Setup if available.
 :: ---------------------------------------------------------------------------
 
 set REPO=%~dp0
@@ -23,19 +23,11 @@ if not exist "%REVIT_DIR%\RevitAPI.dll" (
     exit /b 1
 )
 
-echo [1/4] Protocol library...
-dotnet build "%REPO%src\PowerPotion.Protocol\PowerPotion.Protocol.csproj" -c %CONFIGURATION% -v q -nologo
+echo [1/2] Solution (protocol + renderer host + Revit add-in)...
+dotnet build "%REPO%PowerPotion.sln" -c %CONFIGURATION% -v q -nologo -p:RevitDir="%REVIT_DIR%"
 if errorlevel 1 goto :fail
 
-echo [2/4] Renderer host...
-dotnet build "%REPO%src\PowerPotion.Host\PowerPotion.Host.csproj" -c %CONFIGURATION% -v q -nologo
-if errorlevel 1 goto :fail
-
-echo [3/4] Revit add-in...
-dotnet build "%REPO%src\PowerPotion.Revit\PowerPotion.Revit.csproj" -c %CONFIGURATION% -v q -nologo -p:RevitDir="%REVIT_DIR%"
-if errorlevel 1 goto :fail
-
-echo [4/4] Installer...
+echo [2/2] Installer...
 set ISCC=
 for %%I in (ISCC.exe) do set ISCC=%%~$PATH:I
 if "!ISCC!"=="" if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" set ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe

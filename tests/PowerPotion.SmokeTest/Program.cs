@@ -80,11 +80,11 @@ public static class Program
             w.Write("1.0.0");
         });
 
-        // World immediately: the engine is still booting, so this also checks host-side buffering.
+        // World immediately: the renderer is still starting, so this also checks host-side buffering.
         if (emptyFirst)
         {
             // Reproduces the "document reopened / view hidden" case: an empty world arrives before
-            // the real scene. The host must ignore it and keep the branded splash (no engine flash).
+            // the real scene. The host must ignore it and keep the branded splash.
             var empty = new WorldSnapshot { DocumentName = "SmokeTest.rvt", ViewName = "{3D}" };
             Console.WriteLine("world #0: empty (must be ignored by the host)");
             await Send(MessageType.WorldSnapshot, w => MessageCodec.WriteWorld(w, empty));
@@ -94,8 +94,8 @@ public static class Program
         if (lateWorld)
         {
             // Real Revit order: the plugin exports only after the host reports EngineReady, so the
-            // native window spends several seconds visible-but-empty. Make sure it stays hidden and
-            // does not show its own Enscape splash during that window.
+            // window spends several seconds visible-but-empty. Make sure it stays hidden until the
+            // first world is committed.
             Console.WriteLine("deferring world #1 until the host signals EngineReady");
             using var readyCts = new CancellationTokenSource(TimeSpan.FromSeconds(120));
             while (true)
@@ -118,7 +118,7 @@ public static class Program
         using var cameraCts = new CancellationTokenSource();
         var cameraTask = StreamCamera(world.Camera, cameraCts.Token);
 
-        await Task.Delay(14000); // engine boot + world apply
+        await Task.Delay(14000); // renderer start + world apply
         var a = await CaptureAndWait(shotA, TimeSpan.FromSeconds(90));
         Console.WriteLine($"capture A: {Describe(shotA, a)}");
 

@@ -58,7 +58,6 @@ internal sealed unsafe class ShadowMap : IDisposable
     public float[][] Matrices { get; } = Enumerable.Range(0, CascadeCount).Select(_ => new float[16]).ToArray();
     public float[] Splits { get; } = new float[CascadeCount];
     public uint Size => _size;
-    public event Action<string>? Log;
 
     private void CreateResources()
     {

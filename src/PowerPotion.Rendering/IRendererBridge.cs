@@ -9,13 +9,11 @@ namespace PowerPotion.Rendering;
 /// </summary>
 public interface IRendererBridge : IDisposable
 {
-    bool IsRunning { get; }
     string EngineVersion { get; }
     IntPtr NativeWindowHandle { get; }
     List<string> PreInitCommands { get; }
 
     event Action<string>? Log;
-    event Action? ClosedFromEngine;
     event Action<bool>? CaptureFinished;
     event Action<int>? WorldUpdateFinished;
 
@@ -26,13 +24,8 @@ public interface IRendererBridge : IDisposable
     CameraUpdate? ReadCamera();
     void SetSectionPlanes(float[] planes);
     void ExecuteConsoleCommand(string command, bool deferred);
-    void WaitForIdle();
-    void WaitForFrames(ulong frames);
     void CaptureScreenshot(string filePath, bool panorama, int width = 0, int height = 0);
-    Task<bool> CaptureDone { get; }
-    Task StopAsync();
     void NotifyFocus(bool focused);
-    void NotifyMinimize(bool minimized);
     void FocusRenderWindow();
 }
 

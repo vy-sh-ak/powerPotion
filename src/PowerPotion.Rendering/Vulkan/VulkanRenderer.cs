@@ -24,9 +24,6 @@ namespace PowerPotion.Rendering.Vulkan;
 /// <see cref="DescriptorManager"/>, <see cref="PipelineCache"/> and <see cref="FrameGraph"/>.
 /// P2 adds WorldSnapshot scene/material/texture upload and PBR; P3 adds the NOAA sun, procedural
 /// and HDR/EXR sky, four-cascade PCF shadows, artificial lights and IES.
-///
-/// It uses only the public Vulkan API through Silk.NET and ships its own GLSL shaders; it has no
-/// Enscape dependency of any kind.
 /// </summary>
 public sealed unsafe class VulkanRenderer : IDisposable
 {
@@ -214,7 +211,6 @@ public sealed unsafe class VulkanRenderer : IDisposable
         _postFormat = _swapchainFormat;
         uint shadowSize = _settings.QualityLevel >= 3 ? 4096u : _settings.QualityLevel >= 2 ? 2048u : 1024u;
         _shadowMap = new ShadowMap(_context, _allocator, _pipelines, shadowSize, _descriptors.SceneLayout);
-        _shadowMap.Log += Write;
         CreateDepthResources();
         CreateSceneColorResources();
         CreateFramebuffers();

@@ -196,7 +196,6 @@ public sealed class PowerPotionApp : IExternalApplication
         return installed;
     }
 
-    /// <summary>Command availability: always visible (mirrors Enscape's AlwaysVisibleExternalCommandAvailability).</summary>
     public sealed class AlwaysAvailable : IExternalCommandAvailability
     {
         public bool IsCommandAvailable(UIApplication applicationData, CategorySet selectedCategories) => true;
