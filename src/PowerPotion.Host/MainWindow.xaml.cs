@@ -7,16 +7,19 @@ using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using PowerPotion.Host.Enscape;
 using PowerPotion.Host.Net;
+using PowerPotion.Host.Rendering;
 using PowerPotion.Protocol;
+using PowerPotion.Rendering;
 
 namespace PowerPotion.Host;
 
 public partial class MainWindow : Window
 {
-    private readonly EngineBridge _engine;
+    private readonly IRendererBridge _engine;
     private readonly HostSettings _settings;
     private HostConnection? _connection;
     private RendererSurface? _surface;
+    private VulkanSurface? _vulkanSurface;
     private readonly List<MaterialDto> _materials = new();
     private MaterialDto? _selectedMaterial;
     private bool _sidebarIsMaterials;
@@ -239,7 +242,7 @@ public partial class MainWindow : Window
     private readonly double _presentLeft;
     private readonly double _presentTop;
 
-    public MainWindow(EngineBridge engine, HostSettings settings, HostConnection? connection)
+    public MainWindow(IRendererBridge engine, HostSettings settings, HostConnection? connection)
     {
         _engine = engine;
         _settings = settings;
@@ -313,6 +316,7 @@ public partial class MainWindow : Window
             _connection.MaterialReceived += mat => Dispatcher.Invoke(() =>
             {
                 _engine.ExecuteConsoleCommand("echo material", false);
+                _engine.OverwriteMaterial(mat.Material);
             });
             _connection.ViewActivationReceived += view =>
             {
@@ -339,9 +343,54 @@ public partial class MainWindow : Window
         // Build the renderer surface once loaded.
         Loaded += (_, _) =>
         {
-            if (_surface != null) return;
+            if (_surface != null || _vulkanSurface != null) return;
+
+            if (_engine is RendererBridge rendererBridge)
+            {
+                HostLog.Write("MainWindow.Loaded → creating VulkanSurface (standalone renderer)");
+                var surface = new VulkanSurface();
+                _vulkanSurface = surface;
+                rendererBridge.AttachSurface(surface);
+                surface.Log += m => SetStatus(m);
+                surface.Ready += () =>
+                {
+                    HostLog.Write("VulkanSurface.Ready → applying visual settings");
+                    _engineReady = true;
+                    _nav.SetRenderWindow(surface.ChildHwnd);
+                    _nav.Enabled = true;
+                    SetStatus("Renderer ready (Vulkan P0).");
+                    ApplySettings();
+                    _nav.ApplyModeToEngine();
+                    UpdateNavigationUi();
+                    PresentWindow();
+                    HideLoading();
+                    _ = _connection?.SendEngineReadyAsync(true, "");
+                    if (_pendingWorld != null)
+                    {
+                        var world = _pendingWorld;
+                        _pendingWorld = null;
+                        OnWorld(world);
+                    }
+                };
+                surface.Failed += ex =>
+                {
+                    HostLog.Exception("VulkanSurface.Failed", ex);
+                    ShowLoading("Renderer failed to start — see logs.");
+                    PresentWindow();
+                    _ = _connection?.SendEngineReadyAsync(false, ex.Message);
+                };
+                SurfaceHost.Children.Add(surface);
+                return;
+            }
+
             HostLog.Write("MainWindow.Loaded → creating RendererSurface");
-            _surface = new RendererSurface(_engine, () => DocLabel.Text);
+            if (_engine is not EngineBridge engineBridge)
+            {
+                ShowLoading("Unsupported renderer bridge.");
+                PresentWindow();
+                return;
+            }
+            _surface = new RendererSurface(engineBridge, () => DocLabel.Text);
             _surface.Log += m => SetStatus(m);
             _surface.EngineReady += () =>
             {
@@ -842,6 +891,7 @@ public partial class MainWindow : Window
             _splash?.Close();
             _nav.Dispose();
             _connection?.Dispose();
+            _vulkanSurface?.Stop();
             _engine.Dispose();
         }
         catch { }

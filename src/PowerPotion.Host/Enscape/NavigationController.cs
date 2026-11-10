@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows.Threading;
 using PowerPotion.Protocol;
+using PowerPotion.Rendering;
 
 namespace PowerPotion.Host.Enscape;
 
@@ -23,7 +24,7 @@ public sealed class NavigationController : IDisposable
     private const float FlySpeed = 6.0f;      // m/s
     private const float WalkSpeed = 2.4f;     // m/s
 
-    private readonly EngineBridge _engine;
+    private readonly IRendererBridge _engine;
     private readonly Dispatcher _dispatcher;
     private DispatcherTimer? _timer;
     private IntPtr _renderHwnd = IntPtr.Zero;
@@ -64,7 +65,7 @@ public sealed class NavigationController : IDisposable
         }
     }
 
-    public NavigationController(EngineBridge engine)
+    public NavigationController(IRendererBridge engine)
     {
         _engine = engine;
         _dispatcher = Dispatcher.CurrentDispatcher;

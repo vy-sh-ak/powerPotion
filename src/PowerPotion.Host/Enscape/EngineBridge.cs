@@ -6,6 +6,7 @@ using Enscape.RendererApi;
 using Enscape.RendererApi.DataModel;
 using GlmSharp;
 using PowerPotion.Protocol;
+using PowerPotion.Rendering;
 
 namespace PowerPotion.Host.Enscape;
 
@@ -15,7 +16,7 @@ namespace PowerPotion.Host.Enscape;
 ///
 /// Contains no license, VR, account or telemetry code — by construction. See docs/ARCHITECTURE.md.
 /// </summary>
-public sealed class EngineBridge : IDisposable
+public sealed class EngineBridge : IRendererBridge
 {
     private readonly string _enscapeDir;        // .../RendererHost
     private readonly string _bin64Dir;          // .../RendererHost/Renderer/Bin64

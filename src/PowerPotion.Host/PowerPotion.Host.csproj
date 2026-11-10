@@ -19,6 +19,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PowerPotion.Protocol\PowerPotion.Protocol.csproj" />
+    <ProjectReference Include="..\PowerPotion.Rendering\PowerPotion.Rendering.csproj" />
   </ItemGroup>
 
   <ItemGroup>

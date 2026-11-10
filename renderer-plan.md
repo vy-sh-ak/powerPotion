@@ -8,6 +8,24 @@ uninstaller.
 **Status:** planning complete, all P0 decisions confirmed; stack + inventory re-verified against
 the installed Enscape 4.7 via REA on 2026-11-10 (see §13); ready for implementation.
 
+**P0 status (2026-11-10):** complete — standalone Vulkan cube, resize, PNG capture and clean
+shutdown verified on the RTX 5060; see `docs/p0-spike-report.md`.
+
+**P1 status (2026-11-10):** complete — Vulkan context/swapchain split, allocator, descriptor
+manager, pipeline cache, frame graph, build-time SPIR-V, validation/debug markers, vsync/HDR
+selection; 68 swapchain recreations with 0 validation errors and stable allocation stats; see
+`docs/p1-report.md`.
+
+**P2 status (2026-11-10):** complete — `WorldSnapshot` scene upload, material SSBO, 4-slot
+textures with mips/aniso, GGX PBR (direct + ambient; split-sum IBL follows with P3's sky), normal
+mapping + cutout + double-sided, camera, async revision-gated build and live material hot-swap;
+see `docs/p2-report.md`.
+
+**P3 status (2026-11-10):** complete — NOAA date/location sun, procedural sky/sun/moon/stars,
+`.hdr` and minimal `.exr` skyboxes, 4-cascade PCF sun shadows, point/hemispherical/spot lights,
+IES profiles and CVar settings plumbing; sun elevation/azimuth matches the independent NOAA
+calculation; see `docs/p3-report.md`.
+
 ---
 
 ## 1. Confirmed decisions
