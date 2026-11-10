@@ -50,6 +50,8 @@ public sealed class LiveSyncService : IDisposable
     private DateTime _lastCameraPush = DateTime.MinValue;
     private DateTime _lastSectionPush = DateTime.MinValue;
     private string _lastSectionSignature = "";
+    private bool _lastOrtho;
+    private bool _lastTwoPoint;
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private ExternalEvent? _exportEvent;
     private bool _retryExportScheduled;
@@ -377,6 +379,12 @@ public sealed class LiveSyncService : IDisposable
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(_hostExePath)!,
         };
+        // The plugin ships the standalone Vulkan renderer. An explicit environment value can
+        // still select the legacy Enscape bridge for A/B testing.
+        var renderer = Environment.GetEnvironmentVariable("POWERPOTION_RENDERER");
+        if (string.IsNullOrWhiteSpace(renderer)) renderer = "pp";
+        psi.Environment["POWERPOTION_RENDERER"] = renderer;
+        LogLine($"launching host with renderer='{renderer}'");
         _hostProcess = Process.Start(psi);
     }
 
@@ -734,6 +742,12 @@ public sealed class LiveSyncService : IDisposable
                 AutoExposure = true,
                 TwoPointPerspective = twoPoint,
             };
+            if (camera.Ortho != _lastOrtho || camera.TwoPointPerspective != _lastTwoPoint)
+            {
+                _lastOrtho = camera.Ortho;
+                _lastTwoPoint = camera.TwoPointPerspective;
+                LogLine($"camera mode: {(camera.Ortho ? "ortho" : camera.TwoPointPerspective ? "two-point" : "perspective")}");
+            }
             _lastCameraPush = DateTime.UtcNow;
             _ = SendAsync(MessageType.CameraUpdate, w => MessageCodec.WriteCamera(w, camera));
         }
@@ -750,6 +764,7 @@ public sealed class LiveSyncService : IDisposable
             if (!force && signature == _lastSectionSignature) return;
             _lastSectionSignature = signature;
             _lastSectionPush = DateTime.UtcNow;
+            LogLine($"section planes: {planes.Length / 4}");
             _ = SendAsync(MessageType.SectionPlanesUpdate, w => MessageCodec.WriteSectionPlanes(w, planes));
         }
         catch { }

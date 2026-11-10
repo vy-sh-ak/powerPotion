@@ -353,7 +353,11 @@ public partial class MainWindow : Window
                 var surface = new VulkanSurface();
                 _vulkanSurface = surface;
                 rendererBridge.AttachSurface(surface);
-                surface.Log += m => SetStatus(m);
+                surface.Log += m =>
+                {
+                    HostLog.Write("renderer: " + m);
+                    SetStatus(m);
+                };
                 surface.Ready += () =>
                 {
                     HostLog.Write("VulkanSurface.Ready → applying visual settings");
