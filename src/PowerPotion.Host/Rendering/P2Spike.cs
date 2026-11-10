@@ -341,7 +341,7 @@ public static class P2Spike
         },
     };
 
-    private static float[] CameraQuaternion(float[] forward, float[] up)
+    internal static float[] CameraQuaternion(float[] forward, float[] up)
     {
         static float[] Norm(float[] v)
         {

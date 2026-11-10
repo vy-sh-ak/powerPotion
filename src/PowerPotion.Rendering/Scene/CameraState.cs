@@ -29,11 +29,7 @@ internal sealed class CameraState
     public float[] ViewProjection = Mat4.Identity();
 
     /// <summary>Rotation actually used for the view matrix (yaw-only for two-point perspective).</summary>
-    public float[] ViewRotation = Rotation;
-
-    private bool _hasSceneBounds;
-    private Vec3 _boundsMin;
-    private Vec3 _boundsMax;
+    public float[] ViewRotation = Mat4.Identity();
 
     public bool HasCamera { get; private set; }
 
@@ -70,10 +66,6 @@ internal sealed class CameraState
     /// <summary>Derives near/far from the uploaded scene AABB (P4).</summary>
     public void SetSceneBounds(Vec3 min, Vec3 max)
     {
-        _hasSceneBounds = true;
-        _boundsMin = min;
-        _boundsMax = max;
-
         float nearest = DistanceToBounds(Position, min, max);
         float farthest = FarthestCornerDistance(Position, min, max);
         Near = MathF.Max(0.05f, nearest * 0.5f);

@@ -23,8 +23,12 @@ see `docs/p2-report.md`.
 
 **P3 status (2026-11-10):** complete — NOAA date/location sun, procedural sky/sun/moon/stars,
 `.hdr` and minimal `.exr` skyboxes, 4-cascade PCF sun shadows, point/hemispherical/spot lights,
-IES profiles and CVar settings plumbing; sun elevation/azimuth matches the independent NOAA
-calculation; see `docs/p3-report.md`.
+IES profiles and CVS toggles; NOAA parity and validation-clean captures verified.
+
+**P4 status (2026-11-10):** complete — perspective/orthographic camera with scene-bounds near/far,
+two-point perspective, `SectionPlanesUpdate` protocol message + Revit section-box extraction,
+shader clipping, Fresnel glass/refraction with per-frame transparency sorting and water/grass
+hooks; see `docs/p4-report.md`.
 
 ---
 
