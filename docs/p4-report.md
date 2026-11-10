@@ -118,6 +118,26 @@ Captures:
 - `docs/p4-twopoint.png` — two-point perspective
 - `docs/p4-section.png` — section plane clipping the ground/lower geometry
 
+## Live Revit verification (2026-11-10)
+
+A live session with Revit 2026 and the `House.rvt` model confirmed the full path:
+
+```
+[revit] launching host with renderer='pp'
+[revit] section planes: 6
+renderer: Vulkan renderer ready: NVIDIA GeForce RTX 5060 (Vulkan 1.4.341)
+renderer: camera mode: ortho / two-point
+renderer: screen refraction: enabled (1168x700 scene-colour copy)
+renderer: section: 6 plane(s)
+```
+
+`tests/verify-p4-live.ps1` result: **5/5 PASS** — standalone renderer, camera mode,
+section planes, Vulkan renderer ready, screen refraction.
+
+> Live-session note: the host's **Follow Revit** toggle must be on for Revit camera updates
+> (including orthographic/two-point) to reach the renderer. Host navigation detaches it by design;
+> re-enable the toggle after flying/walking.
+
 ## Limitations / follow-ups
 
 - The screen-colour copy is a full-resolution copy of the swapchain; a half-resolution or
