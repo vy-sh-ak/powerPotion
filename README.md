@@ -4,57 +4,55 @@
   <img src="assets/branding/logo-badge.png" width="150" alt="PowerPotion logo"/>
 </p>
 
-**A personalized, clean-room re-implementation of the Chaos Enscape Revit plugin** — real-time
-rendering, material editing, sun/location, cloud & sky, and capture — **without VR and without
-authentication**, packaged as a single installer with a clean uninstaller.
+**A personalized, clean-room real-time renderer for Autodesk Revit** — live rendering, material
+editing, sun/location, sky/clouds, sections, glass, post-processing and capture — **without VR,
+accounts or authentication**, packaged as a single installer with a clean uninstaller.
 
-PowerPotion was built from static reverse-engineering evidence gathered with the REA toolkit on
-the installed Enscape 4.7.0.57 product. It does **not** contain or modify any Chaos code: it
-loads the rendering engine of your **separately licensed Enscape installation** at runtime,
-through the same managed API (`Enscape.RendererApi.dll`) that Chaos' own RendererHost uses.
-Anything the engine enforces internally (including entitlement) stays fully in effect.
+PowerPotion ships its **own standalone Vulkan 1.3 renderer** (`PowerPotion.Rendering`). The original behavior was studied from public APIs and static
+reverse-engineering evidence (kept under `docs/` as historical notes); all renderer code and
+shaders here are our own.
 
 ## What's inside
 
 ```
 power-potion/
-├── assets/branding/              # logo (SVG/PNG/ICO), ribbon icons, installer art
-├── docs/                          # REA evidence reports + architecture notes
-│   ├── ARCHITECTURE.md            # how Enscape works + how PowerPotion maps onto it
-│   ├── rea-report-revit-plugin.md # full REA analysis of Enscape's Revit add-in
-│   ├── rea-report-rendererhost.md # full REA analysis of the renderer host + native API
-│   └── rendererapi-surface*.txt   # reflection dumps of the shipped managed API
+├── assets/branding/               # logo (SVG/PNG/ICO), ribbon icons, installer art
+├── docs/                          # historical REA notes + per-phase reports
+│   ├── NOT-IMPLEMENTED.md         # deferred features, approximations and inert settings
+│   ├── p4-report.md … p6-report.md
+│   └── rea-report-*.md            # historical analysis (no longer used by the product)
 ├── src/
-│   ├── PowerPotion.Protocol/      # wire protocol between Revit add-in and renderer host
-│   ├── PowerPotion.Host/          # WPF renderer host (embeds the Enscape engine window)
+│   ├── PowerPotion.Protocol/      # wire protocol between the Revit add-in and the host
+│   ├── PowerPotion.Rendering/     # standalone Vulkan renderer + shaders
+│   ├── PowerPotion.Host/          # WPF host: child HWND, Vulkan surface, live-sync UI
 │   └── PowerPotion.Revit/         # Revit 2026 add-in (ribbon, exporter, live sync)
 ├── installer/PowerPotion.iss      # Inno Setup script → PowerPotionSetup.exe
-├── build.cmd                     # builds everything + packages the installer
-└── LICENSE.txt                   # personal/educational use, trademark notes
+├── build.cmd                      # builds everything + packages the installer
+└── LICENSE.txt                    # personal/educational use, trademark notes
 ```
 
-## Feature mapping (Enscape → PowerPotion)
+## Feature mapping
 
-| Enscape feature (observed) | PowerPotion | Notes |
-|---|---|---|
-| Real-time render window (RendererHost.exe) | `PowerPotion.Host.exe` | same embedded-window native API |
-| Ribbon tab + panels | PowerPotion tab | Start/Stop/Pause, capture, material editor, sun |
-| Live geometry sync (CustomExporter pipeline) | `SceneExportContext` | same `IExportContext` callbacks |
-| Materials (19 Revit schemas + keywords) | `RevitMaterialParser` | generic/glass/metal/water/prism + keyword typing |
-| Photometric lights + IES | `LightParser` | intensity units cd/lm/lux/W + color temperature |
-| Sun, location, north angle, time-of-day | `SunParser` | place-and-time and explicit-vector modes |
-| Sky, clouds, fog, quality, exposure (CVars) | Host settings panels | `r_skybox*`, `r_cloud*`, `r_fog`, `sys_spec`, … |
-| Screenshot + panorama capture | toolbar + ribbon | native capture API |
-| Material editor + write-back | `MaterialEditorWindow` | AppearanceAssetEditScope write-back |
-| **VR / HMD support** | ✗ removed | not ported by design |
-| **Accounts / login / licensing** | ✗ removed | engine-side enforcement untouched |
+| Feature | PowerPotion implementation |
+|---|---|
+| Real-time render window | `PowerPotion.Host` + `VulkanSurface` (child HWND, Vulkan swapchain) |
+| Ribbon tab + panels | PowerPotion tab — Start/Stop/Pause, capture, material editor, sun |
+| Live geometry sync | `SceneExportContext` over Revit's `IExportContext` |
+| Materials | `RevitMaterialParser` + GGX PBR, 4 texture slots, glass/water/foliage |
+| Photometric lights + IES | `LightParser` + renderer light buffer/IES sampling |
+| Sun, location, north angle, time-of-day | NOAA solar position + procedural sky/shadows |
+| Sky, clouds, fog, quality, exposure | host panels → typed renderer settings |
+| Camera modes / sections | perspective/ortho/two-point, section planes, glass refraction |
+| Post / capture | ACES, TAA, SSAO/SSGI, bloom/grading, PNG/JPG/EXR, panorama |
+| Screenshot + panorama | renderer capture at window or explicit resolution |
+| **VR / HMD** | ✗ not ported by design |
+| **Accounts / login / licensing** | ✗ not present |
 
 ## Prerequisites
 
 * **Autodesk Revit 2026** (the add-in targets the .NET 8 Revit API)
-* **Chaos Enscape 4.7+** installed and licensed — PowerPotion locates it at
-  `C:\Program Files\Enscape\RendererHost` (or via `POWERPOTION_ENSCAPE_DIR`) and uses its engine
-* Windows 10/11 x64 with a Vulkan-capable GPU (same requirements as Enscape itself)
+* **Windows 10/11 x64** with a **Vulkan 1.3-capable GPU**
+* No separate rendering engine is required.
 
 ## Build
 
@@ -63,38 +61,39 @@ power-potion/
 build.cmd
 ```
 
-`build.cmd` compiles the three projects (Release) and compiles the Inno Setup installer if
-`ISCC.exe` is on the PATH. Without Inno Setup you still get the full binaries under each
-`src/*/bin/Release`.
+`build.cmd` compiles the Protocol, Rendering, Host and Revit projects (Release) and packages the
+Inno Setup installer if `ISCC.exe` is on the PATH. Without Inno Setup the full binaries are under
+each `src/*/bin/Release`.
 
 ## Install / Uninstall
 
 * **Install**: run `installer\Output\PowerPotionSetup.exe`. It
-  * copies the renderer host to `%LocalAppData%\PowerPotion`
+  * copies the renderer host and its Vulkan renderer to `%LocalAppData%\PowerPotion`
   * installs the Revit add-in manifest into `%AppData%\Autodesk\Revit\Addins\2026`
   * registers an uninstaller in Add/Remove Programs (per-user, no admin needed)
   * After installation, (re)start Revit and open any 3D view → **PowerPotion tab → Start Live Render**
 * **Uninstall**: `Add/Remove Programs → PowerPotion` (or the Start-menu entry). The uninstaller
   * kills a running renderer host,
   * removes the add-in manifest, add-in DLLs, host app, `%LocalAppData%\PowerPotion` and
-    `%AppData%\PowerPotion` (settings), leaving Revit and Enscape untouched.
+    `%AppData%\PowerPotion` (settings), leaving Revit untouched.
 
 ## How it works (short version)
 
-1. The Revit add-in exports the active 3D view with Revit's own `CustomExporter`
-   (`IExportContext`) — the same pipeline Enscape's plugin uses — into a compact binary world
-   snapshot (geometry, materials, lights, sun, camera).
-2. It starts `PowerPotion.Host.exe --port <n>`, which loads the installed
-   `Enscape.RendererApi.dll` + native engine, embeds the engine's render window into a WPF
-   surface, and pulls the world over a localhost TCP socket.
+1. The Revit add-in exports the active 3D view with Revit's `CustomExporter` (`IExportContext`)
+   into a compact binary world snapshot (geometry, materials, lights, sun, camera).
+2. It starts `PowerPotion.Host.exe --port <n>`. The host creates a child HWND, initializes the
+   standalone Vulkan renderer, uploads the world over a localhost TCP socket and presents the
+   rendered frame into the WPF layout.
 3. While you model, `DocumentChanged` events trigger debounced re-exports; the active view's
    camera is streamed at ~30 Hz; sun/location and material edits push on demand.
-4. The host's settings panels map directly onto the engine's console-variable (CVar) interface
-   (`r_skyboxFile`, `r_cloudDensity`, `r_fog`, `g_SunPower`, `sys_spec`, `r_hwrt`, `r_dlss`, …)
-   — the same mechanism Chaos' RendererHost uses for its Visual Settings.
+4. Host settings panels map onto the renderer's typed settings/CVar surface (`r_skyboxFile`,
+   `r_cloudDensity`, `r_fog`, `g_SunPower`, `sys_spec`, `r_renderScale`, `r_ssao`, `r_ssgi`, …).
 
-Full evidence trail, API surface maps and the empirical calibration notes:
-**docs/ARCHITECTURE.md**.
+Historical architecture notes and the empirical calibration evidence remain in
+`docs/ARCHITECTURE.md`; they describe the studied product, not a runtime dependency.
+
+For the current list of deferred features, approximations and settings that are accepted but have
+no effect, see **`docs/NOT-IMPLEMENTED.md`**.
 
 ## Branding
 
@@ -114,7 +113,3 @@ dotnet run --project tools\BrandGen
 ```
 
 ## Legal
-
-Personal/educational use. PowerPotion does not bypass or remove any license enforcement;
-it simply never calls the managed license layer, and any engine-internal checks in your
-licensed Enscape installation remain in effect. See `LICENSE.txt`.

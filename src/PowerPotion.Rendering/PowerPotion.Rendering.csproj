@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyTitle>PowerPotion Rendering</AssemblyTitle>
+    <Product>PowerPotion</Product>
+    <Version>0.2.0</Version>
+    <ShaderSourceDir>$(MSBuildThisFileDirectory)Shaders</ShaderSourceDir>
+    <ShaderOutputDir>$(ShaderSourceDir)\Compiled</ShaderOutputDir>
+    <ShaderStamp>$(ShaderOutputDir)\.stamp</ShaderStamp>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PowerPotion.Protocol\PowerPotion.Protocol.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.Vulkan" Version="2.22.0" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.KHR" Version="2.22.0" />
+    <PackageReference Include="Silk.NET.Vulkan.Extensions.EXT" Version="2.22.0" />
+    <PackageReference Include="StbImageSharp" Version="2.30.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ShaderSource Include="$(ShaderSourceDir)\**\*.vert;$(ShaderSourceDir)\**\*.frag;$(ShaderSourceDir)\**\*.comp" />
+    <EmbeddedResource Include="$(ShaderOutputDir)\**\*.spv" />
+  </ItemGroup>
+
+  <!--
+    Build-time shader compilation: GLSL -> SPIR-V with shaderc. The generated .spv files are
+    committed so the renderer has no runtime shaderc dependency; the target refreshes them when
+    a shader source changes.
+  -->
+  <Target Name="CompileShaders" BeforeTargets="BeforeBuild" Inputs="@(ShaderSource)" Outputs="$(ShaderStamp)" Condition="'$(POWERPOTION_SKIP_SHADER_BUILD)' != '1'">
+    <Exec Command="dotnet run --project &quot;$(MSBuildThisFileDirectory)..\..\tools\ShaderCompiler\ShaderCompiler.csproj&quot; -c Release -- &quot;$(ShaderSourceDir)&quot; &quot;$(ShaderOutputDir)&quot;" WorkingDirectory="$(MSBuildThisFileDirectory)..\.." />
+    <Touch Files="$(ShaderStamp)" AlwaysCreate="true" />
+  </Target>
+</Project>

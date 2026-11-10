@@ -1,13 +1,12 @@
 @echo off
-:: Verifies a PowerPotion installation by launching the host in engine-locate mode,
+:: Verifies a PowerPotion installation by launching the standalone host in locate mode,
 :: then checking the installed file layout.
 setlocal
 
 echo --- host self-locate ---
 "%LOCALAPPDATA%\PowerPotion\PowerPotion.Host.exe" --locate
 if errorlevel 1 (
-    echo FAILED: the renderer host could not find the Enscape engine.
-    echo Make sure Enscape 4.7+ is installed, or set POWERPOTION_ENSCAPE_DIR.
+    echo FAILED: the renderer host could not start.
     exit /b 1
 )
 

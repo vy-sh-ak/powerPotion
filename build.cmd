@@ -3,20 +3,18 @@ setlocal
 setlocal enabledelayedexpansion
 
 :: ---------------------------------------------------------------------------
-:: PowerPotion — full build script
-:: Compiles the protocol library, renderer host and Revit add-in (Release),
-:: then builds the installer with Inno Setup if available.
+:: PowerPotion - full build script
+:: Compiles the solution (protocol library, renderer, host, Revit add-in, tests, tools)
+:: in Release, then builds the installer with Inno Setup if available.
 :: ---------------------------------------------------------------------------
 
 set REPO=%~dp0
 set REVIT_DIR=C:\Program Files\Autodesk\Revit 2026
-set ENSCAPE_DIR=C:\Program Files\Enscape\RendererHost
 set CONFIGURATION=Release
 
 echo === PowerPotion build ===
 echo Repo:       %REPO%
 echo Revit:      %REVIT_DIR%
-echo Enscape:    %ENSCAPE_DIR%
 echo.
 
 if not exist "%REVIT_DIR%\RevitAPI.dll" (
@@ -24,25 +22,12 @@ if not exist "%REVIT_DIR%\RevitAPI.dll" (
     echo        Edit REVIT_DIR in build.cmd to point at your Revit 2026 install.
     exit /b 1
 )
-if not exist "%ENSCAPE_DIR%\Enscape.RendererApi.dll" (
-    echo ERROR: Enscape.RendererApi.dll not found under "%ENSCAPE_DIR%".
-    echo        Install Enscape 4.7+ or edit ENSCAPE_DIR in build.cmd.
-    exit /b 1
-)
 
-echo [1/4] Protocol library...
-dotnet build "%REPO%src\PowerPotion.Protocol\PowerPotion.Protocol.csproj" -c %CONFIGURATION% -v q -nologo
+echo [1/2] Solution (protocol + renderer host + Revit add-in)...
+dotnet build "%REPO%PowerPotion.sln" -c %CONFIGURATION% -v q -nologo -p:RevitDir="%REVIT_DIR%"
 if errorlevel 1 goto :fail
 
-echo [2/4] Renderer host...
-dotnet build "%REPO%src\PowerPotion.Host\PowerPotion.Host.csproj" -c %CONFIGURATION% -v q -nologo -p:EnscapeDir="%ENSCAPE_DIR%"
-if errorlevel 1 goto :fail
-
-echo [3/4] Revit add-in...
-dotnet build "%REPO%src\PowerPotion.Revit\PowerPotion.Revit.csproj" -c %CONFIGURATION% -v q -nologo -p:RevitDir="%REVIT_DIR%"
-if errorlevel 1 goto :fail
-
-echo [4/4] Installer...
+echo [2/2] Installer...
 set ISCC=
 for %%I in (ISCC.exe) do set ISCC=%%~$PATH:I
 if "!ISCC!"=="" if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" set ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe

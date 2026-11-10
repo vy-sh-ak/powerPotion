@@ -93,6 +93,7 @@ public static class MessageCodec
             MessageType.Status => new Status { Text = r.ReadString(), Level = r.ReadInt() },
             MessageType.ViewActivation => new ViewActivation { Name = r.ReadString(), Camera = DecodeCamera(r), Sun = DecodeSun(r) },
             MessageType.RendererClosed => new RendererClosed { Reason = r.ReadString() },
+            MessageType.SectionPlanesUpdate => new SectionPlanesUpdate { Planes = r.ReadFloats() },
             MessageType.Shutdown => new Shutdown(),
             _ => throw new InvalidDataException($"Unknown message type {type}"),
         };
@@ -290,4 +291,6 @@ public static class MessageCodec
         w.Write(s.Hour);
         w.Write(s.SunX); w.Write(s.SunY); w.Write(s.SunZ);
     }
+
+    public static void WriteSectionPlanes(ProtocolWriter w, float[] planes) => w.Write(planes);
 }

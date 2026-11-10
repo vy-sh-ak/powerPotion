@@ -10,12 +10,6 @@ using PowerPotion.Revit.Export;
 
 namespace PowerPotion.Revit.Sync;
 
-/// <summary>
-/// Owns the live-rendering session: exports the active 3D view, starts the renderer host
-/// process, serves the world over a localhost TCP socket (same architecture as Enscape's
-/// RemoteCadServer → RendererHost --port), pushes camera updates on Idling and re-exports
-/// on DocumentChanged with a debounce.
-/// </summary>
 public sealed class LiveSyncService : IDisposable
 {
     private readonly UIApplication _uiApp;
@@ -39,8 +33,6 @@ public sealed class LiveSyncService : IDisposable
     private DateTime _lastExport = DateTime.MinValue;
     private DateTime _lastDocumentChange = DateTime.MinValue;
     private volatile bool _reexportQueued;
-    private volatile bool _hostConnected;
-    private bool _initialWorldSent;
     private int _lastWorldModels;
     private long _worldRevision;
     private volatile bool _exportInFlight;
@@ -48,6 +40,13 @@ public sealed class LiveSyncService : IDisposable
     private bool _forceNextSend;
     private ulong _lastSceneSignature;
     private DateTime _lastCameraPush = DateTime.MinValue;
+    private DateTime _lastSectionPush = DateTime.MinValue;
+    private string _lastSectionSignature = "";
+    private bool _lastOrtho;
+    private bool _lastTwoPoint;
+    private bool _cameraModeLogged;
+    private bool _cameraDocMismatchLogged;
+    private bool _cameraErrorLogged;
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private ExternalEvent? _exportEvent;
     private bool _retryExportScheduled;
@@ -100,15 +99,11 @@ public sealed class LiveSyncService : IDisposable
         _running = true;
         LogLine($"Live sync started on port {port} (view: {_view.Name}).");
 
-        // The initial export MUST run inside a Revit API context (CustomExporter is not
-        // thread-safe and cannot be called from a worker thread). The ExternalEvent mirrors
-        // Enscape's RevitCadDispatcher and runs as soon as the host is connected.
         _ = Task.Run(async () =>
         {
             try
             {
                 await WaitForClientAsync();
-                _hostConnected = true;
                 RequestExport("initial");
             }
             catch (Exception ex) { LogLine("start: " + ex.Message); }
@@ -123,7 +118,6 @@ public sealed class LiveSyncService : IDisposable
         public void Execute(UIApplication app) => _owner.ExecutePendingExport();
     }
 
-    /// <summary>Queues an export on Revit's API thread (ExternalEvent, like Enscape's CAD dispatcher).</summary>
     private void RequestExport(string reason)
     {
         try
@@ -167,6 +161,7 @@ public sealed class LiveSyncService : IDisposable
         {
             ExportAndSendWorld(fullExport: true);
             if (!_liveUpdatesPaused) PushCamera();
+            PushSectionPlanes(force: true);
         }
         finally
         {
@@ -178,8 +173,6 @@ public sealed class LiveSyncService : IDisposable
     {
         if (!_running) return;
         _running = false;
-        _hostConnected = false;
-        _initialWorldSent = false;
         try { _exportEvent?.Dispose(); } catch { }
         _exportEvent = null;
         UnhookEvents();
@@ -374,6 +367,8 @@ public sealed class LiveSyncService : IDisposable
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(_hostExePath)!,
         };
+        // The host always runs the standalone Vulkan renderer; no external engine is selected.
+        LogLine("launching standalone renderer host");
         _hostProcess = Process.Start(psi);
     }
 
@@ -464,6 +459,12 @@ public sealed class LiveSyncService : IDisposable
         if (!_liveUpdatesPaused && DateTime.UtcNow - _lastCameraPush >= TimeSpan.FromMilliseconds(33))
         {
             PushCamera();
+        }
+
+        // Section-box changes do not always raise DocumentChanged; poll at 2 Hz.
+        if (!_liveUpdatesPaused && DateTime.UtcNow - _lastSectionPush >= TimeSpan.FromMilliseconds(500))
+        {
+            PushSectionPlanes();
         }
     }
 
@@ -671,8 +672,11 @@ public sealed class LiveSyncService : IDisposable
             await MessageCodec.SendAsync(stream, MessageType.WorldSnapshot, w => MessageCodec.WriteWorld(w, world));
             // sun lives in the world message; also push the camera right after
             await MessageCodec.SendAsync(stream, MessageType.CameraUpdate, w => MessageCodec.WriteCamera(w, world.Camera));
+            var sectionPlanes = _lastContext?.GetSectionPlanes() ?? Array.Empty<float>();
+            if (sectionPlanes.Length > 0)
+                await MessageCodec.SendAsync(stream, MessageType.SectionPlanesUpdate,
+                    w => MessageCodec.WriteSectionPlanes(w, sectionPlanes));
             LogLine("World sent.");
-            _initialWorldSent = true;
         }
         catch (Exception ex)
         {
@@ -689,15 +693,38 @@ public sealed class LiveSyncService : IDisposable
         try
         {
             var uidoc = _uiApp.ActiveUIDocument;
-            if (uidoc?.Document != _document) return;
+            var document = uidoc?.Document;
+            if (document == null || _document == null) return;
+
+            // Revit can hand out different Document wrappers for the same model; compare by
+            // identity first, then by path/title (the same rule the DocumentChanged handler uses).
+            bool sameDocument = ReferenceEquals(document, _document) ||
+                (string.Equals(document.PathName, _document.PathName, StringComparison.OrdinalIgnoreCase) &&
+                 string.Equals(document.Title, _document.Title, StringComparison.Ordinal));
+            if (!sameDocument)
+            {
+                if (!_cameraDocMismatchLogged)
+                {
+                    _cameraDocMismatchLogged = true;
+                    LogLine($"camera push skipped: active document '{document.Title}' differs from '{_document.Title}'");
+                }
+                return;
+            }
+
             var view = _view;
-            if (view == null) return;
+            if (view == null || !view.IsValidObject) return;
 
             var orientation = view.GetOrientation();
             var eye = EngineSpace.Point(orientation.EyePosition);
             var forward = EngineSpace.Vector(orientation.ForwardDirection);
             var up = EngineSpace.Vector(orientation.UpDirection);
             var quat = EngineSpace.CameraQuaternion(forward, up);
+
+            // Revit's two-point perspective keeps the camera up axis vertical; detect it from
+            // the engine-space up vector (world Z -> engine +Y).
+            bool twoPoint = view.IsPerspective &&
+                            MathF.Abs((float)up.Item1) < 1e-3f &&
+                            MathF.Abs((float)up.Item3) < 1e-3f;
 
             var camera = new CameraUpdate
             {
@@ -713,9 +740,42 @@ public sealed class LiveSyncService : IDisposable
                 OrthoBottom = _lastContext?.World.Camera.OrthoBottom ?? -3f,
                 OrthoTop = _lastContext?.World.Camera.OrthoTop ?? 3f,
                 AutoExposure = true,
+                TwoPointPerspective = twoPoint,
             };
+            if (!_cameraModeLogged ||
+                camera.Ortho != _lastOrtho ||
+                camera.TwoPointPerspective != _lastTwoPoint)
+            {
+                _cameraModeLogged = true;
+                _lastOrtho = camera.Ortho;
+                _lastTwoPoint = camera.TwoPointPerspective;
+                LogLine($"camera mode: {(camera.Ortho ? "ortho" : camera.TwoPointPerspective ? "two-point" : "perspective")}");
+            }
             _lastCameraPush = DateTime.UtcNow;
             _ = SendAsync(MessageType.CameraUpdate, w => MessageCodec.WriteCamera(w, camera));
+        }
+        catch (Exception ex)
+        {
+            if (!_cameraErrorLogged)
+            {
+                _cameraErrorLogged = true;
+                LogLine("camera push failed: " + ex.Message);
+            }
+        }
+    }
+
+    /// <summary>P4: pushes the active view section box (or an empty list) when it changes.</summary>
+    private void PushSectionPlanes(bool force = false)
+    {
+        try
+        {
+            var planes = _lastContext?.GetSectionPlanes() ?? Array.Empty<float>();
+            var signature = string.Join(",", planes);
+            if (!force && signature == _lastSectionSignature) return;
+            _lastSectionSignature = signature;
+            _lastSectionPush = DateTime.UtcNow;
+            LogLine($"section planes: {planes.Length / 4}");
+            _ = SendAsync(MessageType.SectionPlanesUpdate, w => MessageCodec.WriteSectionPlanes(w, planes));
         }
         catch { }
     }
@@ -738,11 +798,6 @@ public sealed class LiveSyncService : IDisposable
         });
     }
 
-    /// <summary>
-    /// Revit texture search roots, mirroring Enscape's FileLocator: Revit.ini material libraries and
-    /// additional render appearance paths, the per-version RVT material libraries, the shared Autodesk
-    /// material libraries, and the document folder.
-    /// </summary>
     internal static IEnumerable<string> TextureSearchPaths(Document document)
     {
         var paths = new List<string>();

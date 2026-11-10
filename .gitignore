@@ -26,6 +26,9 @@
 # Installer output (Inno Setup writes here; rebuilt by build.cmd)
 installer/Output/
 
+# Generated shader-build stamp (the .spv files themselves are committed)
+src/PowerPotion.Rendering/Shaders/Compiled/.stamp
+
 # NuGet
 packages/
 *.nupkg

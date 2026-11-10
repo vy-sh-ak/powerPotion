@@ -23,6 +23,7 @@ public sealed class HostConnection : IDisposable
     public event Action<MaterialUpdate>? MaterialReceived;
     public event Action<LiveUpdateState>? LiveUpdateReceived;
     public event Action<ViewActivation>? ViewActivationReceived;
+    public event Action<SectionPlanesUpdate>? SectionPlanesReceived;
     public bool LiveUpdatesPaused { get; private set; }
 
     public HostConnection(TcpClient client, Action<Action> onUi)
@@ -121,6 +122,9 @@ public sealed class HostConnection : IDisposable
                         break;
                     case ViewActivation view:
                         _onUi(() => ViewActivationReceived?.Invoke(view));
+                        break;
+                    case SectionPlanesUpdate planes:
+                        _onUi(() => SectionPlanesReceived?.Invoke(planes));
                         break;
                     case Shutdown:
                         Log?.Invoke("Revit requested shutdown.");
