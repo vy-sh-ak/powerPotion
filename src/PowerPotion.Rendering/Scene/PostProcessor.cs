@@ -24,12 +24,12 @@ public struct PostParams
     public float SafeFrame;
     public float LensFlare;
     public float Time;
-    public float Aspect;
+    public float AutoContrast;
 
     public float SunX;
     public float SunY;
     public float SunStrength;
-    public float AutoExposure;
+    public float Taa;
 }
 
 /// <summary>
@@ -89,6 +89,13 @@ internal sealed unsafe class PostProcessor : IDisposable
                 DescriptorCount = 1,
                 StageFlags = ShaderStageFlags.FragmentBit,
             },
+            new DescriptorSetLayoutBinding
+            {
+                Binding = 2,
+                DescriptorType = DescriptorType.CombinedImageSampler,
+                DescriptorCount = 1,
+                StageFlags = ShaderStageFlags.FragmentBit,
+            },
         };
 
         fixed (DescriptorSetLayoutBinding* bindingPtr = bindings)
@@ -107,7 +114,7 @@ internal sealed unsafe class PostProcessor : IDisposable
         var poolSizes = new[]
         {
             new DescriptorPoolSize { Type = DescriptorType.UniformBuffer, DescriptorCount = Frames },
-            new DescriptorPoolSize { Type = DescriptorType.CombinedImageSampler, DescriptorCount = Frames },
+            new DescriptorPoolSize { Type = DescriptorType.CombinedImageSampler, DescriptorCount = Frames * 2 },
         };
         fixed (DescriptorPoolSize* poolPtr = poolSizes)
         {
@@ -333,7 +340,7 @@ internal sealed unsafe class PostProcessor : IDisposable
         }
     }
 
-    public void Update(int frame, ImageView sourceView, in PostParams parameters)
+    public void Update(int frame, ImageView sourceView, ImageView historyView, in PostParams parameters)
     {
         var data = new float[16];
         data[0] = parameters.Exposure;
@@ -347,11 +354,11 @@ internal sealed unsafe class PostProcessor : IDisposable
         data[8] = parameters.SafeFrame;
         data[9] = parameters.LensFlare;
         data[10] = parameters.Time;
-        data[11] = parameters.Aspect;
+        data[11] = parameters.AutoContrast;
         data[12] = parameters.SunX;
         data[13] = parameters.SunY;
         data[14] = parameters.SunStrength;
-        data[15] = parameters.AutoExposure;
+        data[15] = parameters.Taa;
 
         fixed (float* p = data)
             System.Buffer.MemoryCopy(p, (void*)_mapped[frame], 64, 64);
@@ -365,6 +372,12 @@ internal sealed unsafe class PostProcessor : IDisposable
         var imageInfo = new DescriptorImageInfo
         {
             ImageView = sourceView,
+            Sampler = _sampler,
+            ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+        };
+        var historyInfo = new DescriptorImageInfo
+        {
+            ImageView = historyView,
             Sampler = _sampler,
             ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
         };
@@ -387,6 +400,15 @@ internal sealed unsafe class PostProcessor : IDisposable
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.CombinedImageSampler,
                 PImageInfo = &imageInfo,
+            },
+            new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet,
+                DstSet = _sets[frame],
+                DstBinding = 2,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.CombinedImageSampler,
+                PImageInfo = &historyInfo,
             },
         };
         fixed (WriteDescriptorSet* writePtr = writes)

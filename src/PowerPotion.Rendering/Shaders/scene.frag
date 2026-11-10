@@ -360,9 +360,6 @@ void main()
         }
     }
 
-    // Simple P2 tonemap + gamma for the UNORM swapchain; P5 replaces this with ACES.
-    color = color / (color + vec3(1.0));
-    color = pow(max(color, vec3(0.0)), vec3(1.0 / 2.2));
-
+    // Linear HDR output; ACES tonemapping happens in the post pass.
     outColor = vec4(color, alpha);
 }

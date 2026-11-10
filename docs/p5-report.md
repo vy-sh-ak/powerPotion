@@ -17,13 +17,18 @@ P5 closes the post/capture/settings slice of `renderer-plan.md`:
 
 `src/PowerPotion.Rendering/Scene/PostProcessor.cs` + `Shaders/post.vert` / `post.frag`
 
-- The scene and sky now render into an offscreen `_sceneColorImage`; a fullscreen post pass
-  writes the final image to the swapchain.
+- The scene and sky render **linear HDR** into an `R16G16B16A16_SFLOAT` offscreen target; a
+  fullscreen post pass applies exposure, **ACES filmic tonemapping**, gamma and grading, then
+  writes the swapchain.
 - Post parameters (std140, 64 bytes): exposure, bloom, saturation, contrast, temperature,
-  vignette, chromatic aberration, motion blur, safe frame, lens flare, time, aspect, sun screen
-  position/strength, auto-exposure flag.
-- Effects: 8-tap bloom, radial motion blur, radial chromatic aberration, colour-temperature
-  tint, contrast/auto-contrast, vignette, sun lens flare, and a 90% capture safe-frame border.
+  vignette, chromatic aberration, motion blur, safe frame, lens flare, time, auto-contrast,
+  sun screen position/strength and TAA weight.
+- Effects: 8-tap HDR bloom, radial motion blur, radial chromatic aberration, colour-temperature
+  tint, content-adaptive 3×3 luminance auto-contrast, vignette, sun lens flare, and a 90%
+  capture safe-frame border.
+- **TAA**: Halton subpixel jitter on the camera projection, a history image, and a temporal
+  blend with an LDR neighbourhood clamp. TAA is disabled for captures and when the safe frame
+  is enabled (so the overlay does not ghost).
 - Exposure: manual EV (`exp2(Exposure)`) or auto exposure driven by sun/ambient with
   `r_exposureAdaptionSpeed` smoothing (captures use the target immediately).
 
@@ -65,6 +70,8 @@ capture scale and safe frame. Unknown keys still log and ignore.
 | Explicit resolution | captured at 800×450 |
 | JPG + EXR | both written |
 | Panorama | captured at 1024×512, non-background 100% |
+| ACES tonemap | HDR scene target + ACES reported in the log |
+| TAA | history/jitter active reported in the log |
 | CVar coverage | all host commands recognised (`unknown=0`) |
 | Validation | **0 errors / 0 warnings** |
 | Exit | `P5 PASSED: post, formats, resolution, panorama and CVar coverage verified.` |
@@ -74,11 +81,10 @@ Captures: `docs/p5-base.png`, `docs/p5-exposure.png`, `docs/p5-post.png`,
 
 ## Limitations / follow-ups
 
-- TAA is not implemented yet; the post pass is single-frame. A history buffer + jitter is the
-  natural next step.
-- Auto-contrast is a fixed contrast lift rather than a histogram-driven stretch.
 - Auto exposure is a sun/ambient heuristic with smoothing; a luminance histogram readback would
   make it fully scene-adaptive.
 - Motion blur is a radial screen-space approximation (no per-object velocity buffer).
+- TAA uses a clamped history blend without motion-vector reprojection; camera motion can show
+  minor ghosting on thin geometry.
 - EXR capture writes the tone-mapped LDR frame linearised to float; a true HDR capture path
   belongs with the P6 HDR pipeline.

@@ -17,12 +17,6 @@ layout(set = 0, binding = 1) uniform sampler2D skybox;
 
 const float PI = 3.14159265359;
 
-vec3 tonemap(vec3 c)
-{
-    c = c / (c + vec3(1.0));
-    return pow(max(c, vec3(0.0)), vec3(1.0 / 2.2));
-}
-
 float hash13(vec3 p)
 {
     p = fract(p * 0.1031);
@@ -59,7 +53,7 @@ void main()
             color += disk * sunColor * 4.0;
         }
 
-        outColor = vec4(tonemap(color), 1.0);
+        outColor = vec4(color, 1.0);
         return;
     }
 
@@ -93,5 +87,5 @@ void main()
     float haze = pow(1.0 - clamp(up, 0.0, 1.0), 8.0);
     sky = mix(sky, horizon, haze * 0.25);
 
-    outColor = vec4(tonemap(sky), 1.0);
+    outColor = vec4(sky, 1.0);
 }

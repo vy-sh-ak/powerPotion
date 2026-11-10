@@ -29,6 +29,8 @@ internal sealed class CameraState
     public float Aspect = 1f;
     public float TanHalfFovY = 1f;
     public float[] ViewProjection = Mat4.Identity();
+    public float JitterX;
+    public float JitterY;
 
     /// <summary>Rotation actually used for the view matrix (yaw-only for two-point perspective).</summary>
     public float[] ViewRotation = Mat4.Identity();
@@ -125,7 +127,20 @@ internal sealed class CameraState
                 projection[9] = -verticalShift / MathF.Max(TanHalfFovY, 1e-5f);
             }
         }
+        if (JitterX != 0f || JitterY != 0f)
+        {
+            projection[8] -= JitterX;
+            projection[9] -= JitterY;
+        }
         ViewProjection = Mat4.Multiply(projection, view);
+    }
+
+    public void SetJitter(float x, float y)
+    {
+        if (JitterX == x && JitterY == y) return;
+        JitterX = x;
+        JitterY = y;
+        Rebuild();
     }
 
     /// <summary>World-space corners of the camera frustum between two positive view distances.</summary>

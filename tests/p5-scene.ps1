@@ -59,5 +59,7 @@ if (-not (Test-Path $shot)) { throw "P5 capture missing: $shot" }
 
 $text = Get-Content $out -Raw
 if ($text -match "VK ERROR") { throw "validation errors were reported; see $out" }
+if ($text -notmatch "ACES tonemap") { throw "ACES tonemap was not reported; see $out" }
+if ($text -notmatch "taa: history active") { throw "TAA history did not activate; see $out" }
 
 Write-Host "P5 PASSED: $shot"
