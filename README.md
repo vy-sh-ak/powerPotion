@@ -8,9 +8,7 @@
 editing, sun/location, sky/clouds, sections, glass, post-processing and capture — **without VR,
 accounts or authentication**, packaged as a single installer with a clean uninstaller.
 
-PowerPotion ships its **own standalone Vulkan 1.3 renderer** (`PowerPotion.Rendering`). It does not
-load, link, modify or redistribute any Chaos/Enscape binary or asset, and it does not require an
-Enscape installation. The original behavior was studied from public APIs and static
+PowerPotion ships its **own standalone Vulkan 1.3 renderer** (`PowerPotion.Rendering`). The original behavior was studied from public APIs and static
 reverse-engineering evidence (kept under `docs/` as historical notes); all renderer code and
 shaders here are our own.
 
@@ -20,7 +18,6 @@ shaders here are our own.
 power-potion/
 ├── assets/branding/               # logo (SVG/PNG/ICO), ribbon icons, installer art
 ├── docs/                          # historical REA notes + per-phase reports
-│   ├── ARCHITECTURE.md            # architecture + historical Enscape mapping notes
 │   ├── NOT-IMPLEMENTED.md         # deferred features, approximations and inert settings
 │   ├── p4-report.md … p6-report.md
 │   └── rea-report-*.md            # historical analysis (no longer used by the product)
@@ -116,8 +113,3 @@ dotnet run --project tools\BrandGen
 ```
 
 ## Legal
-
-Personal/educational use. PowerPotion contains no Chaos/Enscape code, binaries, shaders or
-textures. The renderer is our own Vulkan implementation built from public literature; the
-historical reverse-engineering notes are retained as documentation only. See `LICENSE.txt` and
-`docs/THIRD-PARTY-NOTICES.md`.
