@@ -1,6 +1,9 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using PowerPotion.Protocol;
 using PowerPotion.Rendering.Capture;
 using PowerPotion.Rendering.Scene;
@@ -74,6 +77,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
     private bool _cameraModeLogged;
     private bool _lastCameraOrtho;
     private bool _lastCameraTwoPoint;
+    private float _smoothedExposure = 1f;
     private readonly float[] _sectionPlanes = new float[MaxSectionPlanes * 4];
     private int _sectionPlaneCount;
     private const int MaxSectionPlanes = 8;
@@ -98,6 +102,11 @@ public sealed unsafe class VulkanRenderer : IDisposable
     private FrameGraph _frameGraph = null!;
     private SkyRenderer _sky = null!;
     private ShadowMap _shadowMap = null!;
+    private PostProcessor _post = null!;
+    private Format _postFormat;
+    private ImageAllocation? _sceneColorImage;
+    private ImageView _sceneColorView;
+    private Framebuffer[] _postFramebuffers = Array.Empty<Framebuffer>();
     private Format _depthFormat;
     private Framebuffer[] _framebuffers = Array.Empty<Framebuffer>();
     private Framebuffer[] _transparentFramebuffers = Array.Empty<Framebuffer>();
@@ -183,10 +192,13 @@ public sealed unsafe class VulkanRenderer : IDisposable
         _frameGraph = new FrameGraph(_context, _allocator);
         _sky = new SkyRenderer(_context, _allocator, _pipelines, _renderPass);
         _sky.Log += Write;
+        _post = new PostProcessor(_context, _allocator, _pipelines, _swapchainFormat);
+        _postFormat = _swapchainFormat;
         uint shadowSize = _settings.QualityLevel >= 3 ? 4096u : _settings.QualityLevel >= 2 ? 2048u : 1024u;
         _shadowMap = new ShadowMap(_context, _allocator, _pipelines, shadowSize, _descriptors.SceneLayout);
         _shadowMap.Log += Write;
         CreateDepthResources();
+        CreateSceneColorResources();
         CreateFramebuffers();
         CreateRefractionResources();
         CreateVertexBuffer();
@@ -509,11 +521,34 @@ public sealed unsafe class VulkanRenderer : IDisposable
     {
         _framebuffers = new Framebuffer[_swapchainImageViews.Length];
         _transparentFramebuffers = new Framebuffer[_swapchainImageViews.Length];
+        _postFramebuffers = new Framebuffer[_swapchainImageViews.Length];
         for (int i = 0; i < _swapchainImageViews.Length; i++)
         {
-            _framebuffers[i] = CreateFramebuffer(_renderPass, _swapchainImageViews[i]);
-            _transparentFramebuffers[i] = CreateFramebuffer(_transparentRenderPass, _swapchainImageViews[i]);
+            _framebuffers[i] = CreateFramebuffer(_renderPass, _sceneColorView);
+            _transparentFramebuffers[i] = CreateFramebuffer(_transparentRenderPass, _sceneColorView);
+            _postFramebuffers[i] = _post.CreateFramebuffer(
+                _swapchainImageViews[i], _swapchainExtent.Width, _swapchainExtent.Height);
         }
+    }
+
+    private void CreateSceneColorResources()
+    {
+        DestroySceneColorResources();
+        _sceneColorImage = _allocator.CreateImage(
+            _swapchainExtent.Width,
+            _swapchainExtent.Height,
+            _swapchainFormat,
+            ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.SampledBit | ImageUsageFlags.TransferSrcBit,
+            "scene colour");
+        _sceneColorView = CreateImageView(_sceneColorImage.Image, _swapchainFormat, ImageAspectFlags.ColorBit);
+    }
+
+    private void DestroySceneColorResources()
+    {
+        if (_sceneColorView.Handle != 0) _vk.DestroyImageView(_device, _sceneColorView, null);
+        _sceneColorView = default;
+        _sceneColorImage?.Destroy(immediate: true);
+        _sceneColorImage = null;
     }
 
     private Framebuffer CreateFramebuffer(RenderPass renderPass, ImageView colorView)
@@ -1190,7 +1225,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         }
         _frameGraph.AddPass("opaque",
             cmd => RecordOpaquePass(cmd, imageIndex),
-            new ImageTransition(_swapchainImages[imageIndex],
+            new ImageTransition(_sceneColorImage!.Image,
                 ImageLayout.Undefined, ImageLayout.ColorAttachmentOptimal,
                 PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
                 PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
@@ -1206,11 +1241,24 @@ public sealed unsafe class VulkanRenderer : IDisposable
         if (_screenRefractionEnabled)
         {
             _frameGraph.AddPass("refraction-copy",
-                cmd => RecordRefractionCopy(cmd, _swapchainImages[imageIndex]));
+                cmd => RecordRefractionCopy(cmd, _sceneColorImage!.Image));
         }
 
         _frameGraph.AddPass("transparent",
             cmd => RecordTransparentPass(cmd, imageIndex));
+
+        _frameGraph.AddPass("post",
+            cmd => RecordPostPass(cmd, imageIndex),
+            new ImageTransition(_sceneColorImage!.Image,
+                ImageLayout.ColorAttachmentOptimal, ImageLayout.ShaderReadOnlyOptimal,
+                PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.FragmentShaderBit,
+                AccessFlags.ColorAttachmentWriteBit, AccessFlags.ShaderReadBit,
+                ImageAspectFlags.ColorBit),
+            new ImageTransition(_swapchainImages[imageIndex],
+                ImageLayout.Undefined, ImageLayout.ColorAttachmentOptimal,
+                PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.ColorAttachmentOutputBit,
+                0, AccessFlags.ColorAttachmentWriteBit,
+                ImageAspectFlags.ColorBit));
 
         _frameGraph.AddPass("present",
             _ => { },
@@ -1228,6 +1276,77 @@ public sealed unsafe class VulkanRenderer : IDisposable
 
     private void RecordTransparentPass(CommandBuffer commandBuffer, uint imageIndex) =>
         RecordRenderPass(commandBuffer, _transparentFramebuffers[imageIndex], _swapchainExtent, transparent: true);
+
+    private void RecordPostPass(CommandBuffer commandBuffer, uint imageIndex)
+    {
+        UpdatePostParams(_currentFrame);
+        _context.BeginLabel(commandBuffer, "post pass");
+        _post.Record(commandBuffer, _currentFrame, _postFramebuffers[imageIndex], _swapchainExtent);
+        _context.EndLabel(commandBuffer);
+    }
+
+    private void UpdatePostParams(int frame) => _post.Update(frame, _sceneColorView, BuildPostParams(immediate: false));
+
+    private PostParams BuildPostParams(bool immediate = false)
+    {
+        float exposure;
+        if (_camera.AutoExposure)
+        {
+            float target = Math.Clamp(0.9f / MathF.Max(0.5f,
+                _sunInfo.Intensity * 0.25f + (float)_settings.GiAmbientAmount * 0.10f), 0.5f, 2.5f);
+            if (immediate)
+            {
+                _smoothedExposure = target;
+            }
+            else
+            {
+                float k = Math.Clamp((float)_settings.ExposureAdaptionSpeed * 0.08f, 0.01f, 1f);
+                _smoothedExposure += (target - _smoothedExposure) * k;
+            }
+            exposure = _smoothedExposure;
+        }
+        else
+        {
+            exposure = MathF.Pow(2f, _camera.Exposure);
+        }
+
+        float temperature = Math.Clamp((10000f - (float)_settings.ColorTemperature) / 8000f, 0f, 1f);
+
+        var sunWorld = _camera.Position + _sunInfo.Direction * 100f;
+        var m = _camera.ViewProjection;
+        float x = m[0] * sunWorld.X + m[4] * sunWorld.Y + m[8] * sunWorld.Z + m[12];
+        float y = m[1] * sunWorld.X + m[5] * sunWorld.Y + m[9] * sunWorld.Z + m[13];
+        float w = m[3] * sunWorld.X + m[7] * sunWorld.Y + m[11] * sunWorld.Z + m[15];
+        float sunX = 0.5f, sunY = 0.5f, sunStrength = 0f;
+        if (MathF.Abs(w) > 1e-5f)
+        {
+            sunX = x / w * 0.5f + 0.5f;
+            sunY = y / w * 0.5f + 0.5f;
+            var forward = new Vec3(-_camera.Rotation[8], -_camera.Rotation[9], -_camera.Rotation[10]);
+            sunStrength = MathF.Max(0f, Vec3.Dot(forward, _sunInfo.Direction));
+        }
+
+        var parameters = new PostParams
+        {
+            Exposure = exposure,
+            Bloom = (float)_settings.BloomIntensity,
+            Saturation = (float)_settings.Saturation,
+            Contrast = _settings.AutoContrast ? 0.15f : 0f,
+            Temperature = temperature,
+            Vignette = (float)_settings.Vignette,
+            ChromaticAberration = (float)_settings.ChromaticAberration,
+            MotionBlur = (float)_settings.MotionBlur,
+            SafeFrame = _settings.ShowSafeFrame ? 1f : 0f,
+            LensFlare = (float)_settings.LensFlare,
+            Time = (float)_clock.Elapsed.TotalSeconds,
+            Aspect = _camera.Aspect,
+            SunX = sunX,
+            SunY = sunY,
+            SunStrength = sunStrength,
+            AutoExposure = _camera.AutoExposure ? 1f : 0f,
+        };
+        return parameters;
+    }
 
     private void RecordRenderPass(CommandBuffer commandBuffer, Framebuffer framebuffer, Extent2D extent,
         bool transparent)
@@ -1477,25 +1596,45 @@ public sealed unsafe class VulkanRenderer : IDisposable
     // Capture
     // ------------------------------------------------------------------
 
-    public bool Capture(string path)
+    public bool Capture(string path) => CaptureInternal(path, 0, 0);
+
+    /// <summary>P5: captures at an explicit resolution (0/negative = window size × capture scale).</summary>
+    public bool Capture(string path, int width, int height) =>
+        CaptureInternal(path, (uint)Math.Max(0, width), (uint)Math.Max(0, height));
+
+    private bool CaptureInternal(string path, uint width, uint height)
     {
         if (_disposed || !IsInitialized) return false;
         ProcessPendingScenes();
         _vk.DeviceWaitIdle(_device);
 
-        uint width = _swapchainExtent.Width;
-        uint height = _swapchainExtent.Height;
+        if (width == 0 || height == 0)
+        {
+            float scale = Math.Clamp((float)_settings.CaptureResolutionScale, 0.25f, 4f);
+            width = Math.Max(1u, (uint)(_swapchainExtent.Width * scale));
+            height = Math.Max(1u, (uint)(_swapchainExtent.Height * scale));
+        }
         if (width == 0 || height == 0) return false;
 
+        // Captures can be a different size than the swapchain; the screen-colour copy is
+        // swapchain-sized, so use the environment refraction fallback for captures.
+        bool savedScreenRefraction = _screenRefractionEnabled;
+        _screenRefractionEnabled = false;
+
         var colorTransient = _frameGraph.GetTransientImage("capture-color", width, height, _swapchainFormat,
-            ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.TransferSrcBit);
+            ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.TransferSrcBit | ImageUsageFlags.SampledBit);
         var depthTransient = _frameGraph.GetTransientImage("capture-depth", width, height, _depthFormat,
             ImageUsageFlags.DepthStencilAttachmentBit);
+        var postTransient = _frameGraph.GetTransientImage("capture-post", width, height, _swapchainFormat,
+            ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.TransferSrcBit);
 
         Framebuffer opaqueFramebuffer = CreateCaptureFramebuffer(
             _renderPass, colorTransient.View, depthTransient.View, width, height);
         Framebuffer transparentFramebuffer = CreateCaptureFramebuffer(
             _transparentRenderPass, colorTransient.View, depthTransient.View, width, height);
+        Framebuffer postFramebuffer = _post.CreateFramebuffer(postTransient.View, width, height);
+
+        _camera.SetAspect(width, height);
 
         ulong bufferSize = (ulong)width * height * 4;
         var readbackAllocation = _allocator.CreateBuffer(bufferSize, BufferUsageFlags.TransferDstBit,
@@ -1533,6 +1672,23 @@ public sealed unsafe class VulkanRenderer : IDisposable
         _frameGraph.AddPass("capture-transparent",
             cmd => RecordRenderPass(cmd, transparentFramebuffer, extent, transparent: true));
 
+        _frameGraph.AddPass("capture-post",
+            cmd =>
+            {
+                _post.Update(_currentFrame, colorTransient.View, BuildPostParams(immediate: true));
+                _post.Record(cmd, _currentFrame, postFramebuffer, extent);
+            },
+            new ImageTransition(colorTransient.Allocation.Image,
+                ImageLayout.ColorAttachmentOptimal, ImageLayout.ShaderReadOnlyOptimal,
+                PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.FragmentShaderBit,
+                AccessFlags.ColorAttachmentWriteBit, AccessFlags.ShaderReadBit,
+                ImageAspectFlags.ColorBit),
+            new ImageTransition(postTransient.Allocation.Image,
+                ImageLayout.Undefined, ImageLayout.ColorAttachmentOptimal,
+                PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.ColorAttachmentOutputBit,
+                0, AccessFlags.ColorAttachmentWriteBit,
+                ImageAspectFlags.ColorBit));
+
         _frameGraph.AddPass("capture-copy",
             cmd =>
             {
@@ -1551,10 +1707,10 @@ public sealed unsafe class VulkanRenderer : IDisposable
                     ImageOffset = new Offset3D { X = 0, Y = 0, Z = 0 },
                     ImageExtent = new Extent3D { Width = width, Height = height, Depth = 1 },
                 };
-                _vk.CmdCopyImageToBuffer(cmd, colorTransient.Allocation.Image,
+                _vk.CmdCopyImageToBuffer(cmd, postTransient.Allocation.Image,
                     ImageLayout.TransferSrcOptimal, readbackAllocation.Buffer, 1, &copy);
             },
-            new ImageTransition(colorTransient.Allocation.Image,
+            new ImageTransition(postTransient.Allocation.Image,
                 ImageLayout.ColorAttachmentOptimal, ImageLayout.TransferSrcOptimal,
                 PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.TransferBit,
                 AccessFlags.ColorAttachmentWriteBit, AccessFlags.TransferReadBit,
@@ -1566,15 +1722,157 @@ public sealed unsafe class VulkanRenderer : IDisposable
         var pixels = new byte[bufferSize];
         Marshal.Copy(readbackAllocation.Mapped, pixels, 0, pixels.Length);
 
-        PngWriter.WriteBgra(path, (int)width, (int)height, pixels);
+        CaptureWriter.Write(path, (int)width, (int)height, pixels);
 
         _vk.DestroyFramebuffer(_device, opaqueFramebuffer, null);
         _vk.DestroyFramebuffer(_device, transparentFramebuffer, null);
+        _vk.DestroyFramebuffer(_device, postFramebuffer, null);
         readbackAllocation.Destroy(immediate: true);
         _allocator.CollectGarbage(0);
+        _camera.SetAspect(_swapchainExtent.Width, _swapchainExtent.Height);
+        _screenRefractionEnabled = savedScreenRefraction;
 
         Write($"Captured {width}x{height} to '{path}'.");
         return true;
+    }
+
+    private static readonly (Vec3 Forward, Vec3 Up)[] PanoramaFaces =
+    {
+        (new Vec3(1, 0, 0), new Vec3(0, 1, 0)),
+        (new Vec3(-1, 0, 0), new Vec3(0, 1, 0)),
+        (new Vec3(0, 1, 0), new Vec3(0, 0, -1)),
+        (new Vec3(0, -1, 0), new Vec3(0, 0, 1)),
+        (new Vec3(0, 0, 1), new Vec3(0, 1, 0)),
+        (new Vec3(0, 0, -1), new Vec3(0, 1, 0)),
+    };
+
+    /// <summary>
+    /// P5 panorama: renders six 90-degree faces and stitches them into an equirectangular image.
+    /// </summary>
+    public bool CapturePanorama(string path, int width, int height)
+    {
+        if (_disposed || !IsInitialized) return false;
+        if (width <= 0) width = 2048;
+        if (height <= 0) height = width / 2;
+        int faceSize = Math.Clamp(width / 4, 256, 1024);
+
+        var savedPosition = _camera.Position;
+        var savedRotation = _camera.Rotation;
+        var savedViewRotation = _camera.ViewRotation;
+        float savedFov = _camera.FovDegrees;
+        int savedFovType = _camera.FovType;
+        bool savedOrtho = _camera.Ortho;
+        float savedLeft = _camera.OrthoLeft, savedRight = _camera.OrthoRight;
+        float savedBottom = _camera.OrthoBottom, savedTop = _camera.OrthoTop;
+        bool savedTwoPoint = _camera.TwoPointPerspective;
+        bool savedAutoExposure = _camera.AutoExposure;
+        float savedExposure = _camera.Exposure;
+
+        var tempDir = Path.Combine(Path.GetTempPath(), "powerpotion_pano_" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempDir);
+        var faces = new byte[6][];
+
+        try
+        {
+            for (int i = 0; i < PanoramaFaces.Length; i++)
+            {
+                var (forward, up) = PanoramaFaces[i];
+                _camera.Ortho = false;
+                _camera.TwoPointPerspective = false;
+                _camera.FovDegrees = 90f;
+                _camera.FovType = 1;
+                _camera.Rotation = CameraState.LookAtRotation(
+                    _camera.Position, _camera.Position + forward, up);
+                _camera.SetAspect((uint)faceSize, (uint)faceSize);
+                _camera.Rebuild();
+
+                var facePath = Path.Combine(tempDir, $"face{i}.png");
+                if (!Capture(facePath, faceSize, faceSize)) return false;
+                faces[i] = LoadBgra(facePath, faceSize, faceSize);
+            }
+
+            var equirect = StitchEquirect(faces, faceSize, width, height);
+            CaptureWriter.Write(path, width, height, equirect);
+            Write($"Captured panorama {width}x{height} to '{path}'.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Write("panorama failed: " + ex.Message);
+            return false;
+        }
+        finally
+        {
+            _camera.Position = savedPosition;
+            _camera.Rotation = savedRotation;
+            _camera.ViewRotation = savedViewRotation;
+            _camera.FovDegrees = savedFov;
+            _camera.FovType = savedFovType;
+            _camera.Ortho = savedOrtho;
+            _camera.OrthoLeft = savedLeft;
+            _camera.OrthoRight = savedRight;
+            _camera.OrthoBottom = savedBottom;
+            _camera.OrthoTop = savedTop;
+            _camera.TwoPointPerspective = savedTwoPoint;
+            _camera.AutoExposure = savedAutoExposure;
+            _camera.Exposure = savedExposure;
+            _camera.SetAspect(_swapchainExtent.Width, _swapchainExtent.Height);
+            try { Directory.Delete(tempDir, true); } catch { }
+        }
+    }
+
+    private static byte[] LoadBgra(string path, int width, int height)
+    {
+        var frame = BitmapFrame.Create(
+            new Uri(Path.GetFullPath(path)), BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+        var converted = new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0);
+        var pixels = new byte[width * height * 4];
+        converted.CopyPixels(pixels, width * 4, 0);
+        return pixels;
+    }
+
+    private static byte[] StitchEquirect(byte[][] faces, int faceSize, int width, int height)
+    {
+        var output = new byte[width * height * 4];
+        for (int y = 0; y < height; y++)
+        {
+            float lat = ((y + 0.5f) / height - 0.5f) * MathF.PI;
+            float cosLat = MathF.Cos(lat);
+            float sinLat = MathF.Sin(lat);
+            for (int x = 0; x < width; x++)
+            {
+                float lon = ((x + 0.5f) / width - 0.5f) * 2f * MathF.PI;
+                var direction = new Vec3(cosLat * MathF.Cos(lon), sinLat, cosLat * MathF.Sin(lon));
+
+                int bestFace = 0;
+                float bestDenom = float.MinValue;
+                float bestU = 0f, bestV = 0f;
+                for (int f = 0; f < PanoramaFaces.Length; f++)
+                {
+                    var (forward, up) = PanoramaFaces[f];
+                    float denom = Vec3.Dot(direction, forward);
+                    if (denom <= bestDenom) continue;
+                    var right = Vec3.Normalize(Vec3.Cross(forward, up));
+                    bestFace = f;
+                    bestDenom = denom;
+                    bestU = Vec3.Dot(direction, right) / denom;
+                    bestV = Vec3.Dot(direction, up) / denom;
+                }
+
+                float texU = Math.Clamp((bestU + 1f) * 0.5f, 0f, 0.999f);
+                float texV = Math.Clamp((1f - bestV) * 0.5f, 0f, 0.999f);
+                int px = Math.Clamp((int)(texU * faceSize), 0, faceSize - 1);
+                int py = Math.Clamp((int)(texV * faceSize), 0, faceSize - 1);
+                int src = (py * faceSize + px) * 4;
+                int dst = (y * width + x) * 4;
+                var face = faces[bestFace];
+                output[dst] = face[src];
+                output[dst + 1] = face[src + 1];
+                output[dst + 2] = face[src + 2];
+                output[dst + 3] = 255;
+            }
+        }
+        return output;
     }
 
     private Framebuffer CreateCaptureFramebuffer(RenderPass renderPass, ImageView colorView, ImageView depthView,
@@ -1698,7 +1996,14 @@ public sealed unsafe class VulkanRenderer : IDisposable
 
         _swapchainState.Recreate(_pendingWidth, _pendingHeight);
         SwapchainRecreationCount++;
+        if (_postFormat != _swapchainFormat)
+        {
+            _post.Dispose();
+            _post = new PostProcessor(_context, _allocator, _pipelines, _swapchainFormat);
+            _postFormat = _swapchainFormat;
+        }
         CreateDepthResources();
+        CreateSceneColorResources();
         CreateFramebuffers();
         CreateRefractionResources();
         _camera.SetAspect(_swapchainExtent.Width, _swapchainExtent.Height);
@@ -1712,7 +2017,11 @@ public sealed unsafe class VulkanRenderer : IDisposable
         foreach (var framebuffer in _transparentFramebuffers)
             _vk.DestroyFramebuffer(_device, framebuffer, null);
         _transparentFramebuffers = Array.Empty<Framebuffer>();
+        foreach (var framebuffer in _postFramebuffers)
+            _vk.DestroyFramebuffer(_device, framebuffer, null);
+        _postFramebuffers = Array.Empty<Framebuffer>();
 
+        DestroySceneColorResources();
         DestroyRefractionResources();
 
         if (_depthView.Handle != 0) _vk.DestroyImageView(_device, _depthView, null);
@@ -1781,6 +2090,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
                 if (_pipeline.Handle != 0) _vk.DestroyPipeline(_device, _pipeline, null);
                 _shadowMap?.Dispose();
                 _sky?.Dispose();
+                _post?.Dispose();
                 _pipelines?.Dispose();
                 _descriptors?.Dispose();
                 if (_renderPass.Handle != 0) _vk.DestroyRenderPass(_device, _renderPass, null);

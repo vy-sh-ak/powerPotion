@@ -904,7 +904,7 @@ public sealed class EngineBridge : IRendererBridge
     /// <summary>Completes when the current capture finishes (true = success).</summary>
     public Task<bool> CaptureDone => (_captureTcs ??= new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
 
-    public void CaptureScreenshot(string filePath, bool panorama)
+    public void CaptureScreenshot(string filePath, bool panorama, int width = 0, int height = 0)
     {
         if (_scope?.TryGetCaptureApi(out var api) != true) return;
         _captureTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -15,7 +15,7 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        const string usage = "PowerPotion.Host --port <n> [--doc <name>] | --selftest [--frames N] [--shot <path>] | --p0 [--shot <path>] [--seconds N] [--resize] | --p1 [--shot <path>] | --p2 [--shot <path>] | --p3 [--shot <path>] | --p4 [--shot <path>] | --locate";
+        const string usage = "PowerPotion.Host --port <n> [--doc <name>] | --selftest [--frames N] [--shot <path>] | --p0 [--shot <path>] [--seconds N] [--resize] | --p1 [--shot <path>] | --p2 [--shot <path>] | --p3 [--shot <path>] | --p4 [--shot <path>] | --p5 [--shot <path>] | --locate";
         int port = 0;
         string doc = "";
         bool selftest = false;
@@ -24,6 +24,7 @@ public static class Program
         bool p2 = false;
         bool p3 = false;
         bool p4 = false;
+        bool p5 = false;
         bool resizeTest = false;
         string? shot = null;
         int frames = 60;
@@ -41,6 +42,7 @@ public static class Program
                 case "--p2": p2 = true; break;
                 case "--p3": p3 = true; break;
                 case "--p4": p4 = true; break;
+                case "--p5": p5 = true; break;
                 case "--resize": resizeTest = true; break;
                 case "--shot" when i + 1 < args.Length: shot = args[++i]; break;
                 case "--frames" when i + 1 < args.Length: frames = int.Parse(args[++i]); break;
@@ -51,7 +53,8 @@ public static class Program
             }
         }
 
-        // P0-P4 run the standalone Vulkan renderer and deliberately do not touch Enscape.
+        // P0-P5 run the standalone Vulkan renderer and deliberately do not touch Enscape.
+        if (p5) return P5Spike.Run(shot);
         if (p4) return P4Spike.Run(shot);
         if (p3) return P3Spike.Run(shot);
         if (p2) return P2Spike.Run(shot);

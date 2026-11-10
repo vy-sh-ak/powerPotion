@@ -527,7 +527,7 @@ public partial class MainWindow : Window
             ? Path.Combine(_captureDir, $"PowerPotion-{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.png")
             : req.FilePath;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        _engine.CaptureScreenshot(path, req.Panorama);
+        _engine.CaptureScreenshot(path, req.Panorama, req.Width, req.Height);
         if (_connection != null)
         {
             // result is reported via engine callback; also ack immediately with path

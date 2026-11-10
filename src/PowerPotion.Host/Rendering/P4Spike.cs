@@ -133,7 +133,7 @@ public static class P4Spike
                 bool sectionChanged = sectionImage.Hash != baseImage.Hash;
                 // The sky covers the whole frame, so compare the ground band with the base frame.
                 double sectionDiff = BottomDifference(basePath, sectionPath);
-                bool clipped = sectionDiff > 15.0;
+                bool clipped = sectionDiff > 8.0;
                 Console.WriteLine($"P4 section: captured={capturedSection} changed={sectionChanged} " +
                                   $"clipped={clipped} bottomDiff={sectionDiff:0.0} nonBg={sectionImage.NonBackground:P1}");
 

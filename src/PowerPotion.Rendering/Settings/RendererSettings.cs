@@ -24,6 +24,29 @@ public sealed class RendererSettings
     public double FogAmount;
     public double FogHeight = 30;
 
+    // P5 post / capture surface.
+    public bool AutoExposure = true;
+    public double Exposure;
+    public double ExposureAdaptionSpeed = 1;
+    public double BloomIntensity = 0.25;
+    public double Saturation = 1;
+    public double ColorTemperature = 6500;
+    public bool AutoContrast;
+    public double Vignette;
+    public double LensFlare;
+    public double MotionBlur;
+    public double ChromaticAberration;
+    public bool ShowSafeFrame;
+    public double CaptureResolutionScale = 1;
+
+    // Atmosphere controls are accepted now and consumed by P6.
+    public double CloudDensity = 0.5;
+    public double CloudCirrus = 0.3;
+    public double CloudVariety = 0.5;
+    public double CloudContrails;
+    public double CloudOffsetX;
+    public double CloudOffsetZ;
+
     public bool WhiteBackground;
 
     public RendererSettings Clone() => (RendererSettings)MemberwiseClone();

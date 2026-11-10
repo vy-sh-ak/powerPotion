@@ -133,5 +133,6 @@ public sealed class HostSettings
         ($"r_lightBrightness {I(LightBrightness)}", true),
         ($"r_whiteBackground {I(WhiteBackground)}", true),
         ($"r_showCaptureSafeFrame {I(ShowSafeFrame)}", true),
+        ($"r_captureResolution {I(CaptureResolutionScale)}", true),
     };
 }

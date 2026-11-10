@@ -30,6 +30,11 @@ two-point perspective, `SectionPlanesUpdate` protocol message + Revit section-bo
 shader clipping, Fresnel glass/refraction with per-frame transparency sorting and water/grass
 hooks; see `docs/p4-report.md`.
 
+**P5 status (2026-11-10):** complete — offscreen post pass (exposure/adaptation, bloom,
+saturation, colour temperature, contrast, vignette, chromatic aberration, motion blur, lens
+flare, safe frame), PNG/JPG/EXR capture at explicit resolutions, six-face equirect panorama and
+full `HostSettings` CVar coverage; see `docs/p5-report.md`.
+
 ---
 
 ## 1. Confirmed decisions

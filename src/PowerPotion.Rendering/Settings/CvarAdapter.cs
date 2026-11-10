@@ -72,6 +72,57 @@ public static class CvarAdapter
             case "r_whiteBackground":
                 settings.WhiteBackground = ParseBool(value, false);
                 return true;
+            case "r_cloudDensity":
+                if (TryDouble(value, out var cloudDensity)) settings.CloudDensity = Math.Clamp(cloudDensity, 0, 1);
+                return true;
+            case "r_cloudCirrusAmount":
+                if (TryDouble(value, out var cloudCirrus)) settings.CloudCirrus = Math.Clamp(cloudCirrus, 0, 1);
+                return true;
+            case "r_cloudVariety":
+                if (TryDouble(value, out var cloudVariety)) settings.CloudVariety = Math.Clamp(cloudVariety, 0, 1);
+                return true;
+            case "r_cloudContrails":
+                if (TryDouble(value, out var cloudContrails)) settings.CloudContrails = Math.Clamp(cloudContrails, 0, 1);
+                return true;
+            case "r_cloudOffsetX":
+                if (TryDouble(value, out var cloudOffsetX)) settings.CloudOffsetX = cloudOffsetX;
+                return true;
+            case "r_cloudOffsetZ":
+                if (TryDouble(value, out var cloudOffsetZ)) settings.CloudOffsetZ = cloudOffsetZ;
+                return true;
+            case "r_bloomIntensity":
+                if (TryDouble(value, out var bloom)) settings.BloomIntensity = Math.Max(0, bloom);
+                return true;
+            case "r_postSaturation":
+                if (TryDouble(value, out var saturation)) settings.Saturation = Math.Max(0, saturation);
+                return true;
+            case "r_postColorTemperature":
+                if (TryDouble(value, out var temperature)) settings.ColorTemperature = Math.Clamp(temperature, 1000, 12000);
+                return true;
+            case "r_postAutoContrast":
+                settings.AutoContrast = ParseBool(value, false);
+                return true;
+            case "r_vignette":
+                if (TryDouble(value, out var vignette)) settings.Vignette = Math.Clamp(vignette, 0, 1);
+                return true;
+            case "r_lensFlare":
+                if (TryDouble(value, out var flare)) settings.LensFlare = Math.Clamp(flare, 0, 1);
+                return true;
+            case "r_motionBlur":
+                if (TryDouble(value, out var motionBlur)) settings.MotionBlur = Math.Clamp(motionBlur, 0, 1);
+                return true;
+            case "r_chromaticAberration":
+                if (TryDouble(value, out var ca)) settings.ChromaticAberration = Math.Clamp(ca, 0, 1);
+                return true;
+            case "r_exposureAdaptionSpeed":
+                if (TryDouble(value, out var adapt)) settings.ExposureAdaptionSpeed = Math.Max(0, adapt);
+                return true;
+            case "r_showCaptureSafeFrame":
+                settings.ShowSafeFrame = ParseBool(value, false);
+                return true;
+            case "r_captureResolution":
+                if (TryDouble(value, out var captureScale)) settings.CaptureResolutionScale = Math.Clamp(captureScale, 0.25, 4);
+                return true;
             default:
                 return false;
         }

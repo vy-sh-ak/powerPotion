@@ -113,13 +113,13 @@ public sealed class RendererBridge : IRendererBridge
     public Task<bool> CaptureDone =>
         (_captureCompletion ??= new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
 
-    public void CaptureScreenshot(string filePath, bool panorama)
+    public void CaptureScreenshot(string filePath, bool panorama, int width = 0, int height = 0)
     {
         _captureCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _ = CaptureAsync(filePath, panorama);
+        _ = CaptureAsync(filePath, panorama, width, height);
     }
 
-    private async Task CaptureAsync(string filePath, bool panorama)
+    private async Task CaptureAsync(string filePath, bool panorama, int width, int height)
     {
         bool ok = false;
         try
@@ -130,8 +130,9 @@ public sealed class RendererBridge : IRendererBridge
             }
             else
             {
-                if (panorama) Log?.Invoke("P0 capture: panorama requested; writing a normal frame for now.");
-                ok = await _surface.CaptureAsync(filePath);
+                ok = panorama
+                    ? await _surface.CapturePanoramaAsync(filePath, width, height)
+                    : await _surface.CaptureAsync(filePath, width, height);
             }
         }
         catch (Exception ex)

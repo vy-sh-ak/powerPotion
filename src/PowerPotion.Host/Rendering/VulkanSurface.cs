@@ -86,6 +86,9 @@ public sealed class VulkanSurface : HwndHost, IRenderSurface
     private VulkanRenderer? _renderer;
     private Exception? _error;
     private string? _capturePath;
+    private int _captureWidth;
+    private int _captureHeight;
+    private bool _capturePanorama;
     private TaskCompletionSource<bool>? _captureCompletion;
 
     public event Action<string>? Log;
@@ -179,12 +182,17 @@ public sealed class VulkanSurface : HwndHost, IRenderSurface
                 renderer.RenderFrame();
 
                 string? capturePath = null;
+                int captureWidth = 0, captureHeight = 0;
+                bool capturePanorama = false;
                 TaskCompletionSource<bool>? capture = null;
                 lock (_captureLock)
                 {
                     if (_capturePath != null)
                     {
                         capturePath = _capturePath;
+                        captureWidth = _captureWidth;
+                        captureHeight = _captureHeight;
+                        capturePanorama = _capturePanorama;
                         capture = _captureCompletion;
                         _capturePath = null;
                         _captureCompletion = null;
@@ -194,7 +202,12 @@ public sealed class VulkanSurface : HwndHost, IRenderSurface
                 if (capturePath != null)
                 {
                     bool ok = false;
-                    try { ok = renderer.Capture(capturePath); }
+                    try
+                    {
+                        ok = capturePanorama
+                            ? renderer.CapturePanorama(capturePath, captureWidth, captureHeight)
+                            : renderer.Capture(capturePath, captureWidth, captureHeight);
+                    }
                     catch (Exception ex) { Post(() => Log?.Invoke("capture failed: " + ex.Message)); }
                     capture?.TrySetResult(ok);
                 }
@@ -225,12 +238,29 @@ public sealed class VulkanSurface : HwndHost, IRenderSurface
         catch { }
     }
 
-    public Task<bool> CaptureAsync(string path)
+    public Task<bool> CaptureAsync(string path, int width = 0, int height = 0)
     {
         var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         lock (_captureLock)
         {
             _capturePath = path;
+            _captureWidth = width;
+            _captureHeight = height;
+            _capturePanorama = false;
+            _captureCompletion = completion;
+        }
+        return completion.Task;
+    }
+
+    public Task<bool> CapturePanoramaAsync(string path, int width = 0, int height = 0)
+    {
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_captureLock)
+        {
+            _capturePath = path;
+            _captureWidth = width;
+            _captureHeight = height;
+            _capturePanorama = true;
             _captureCompletion = completion;
         }
         return completion.Task;

@@ -28,7 +28,7 @@ public interface IRendererBridge : IDisposable
     void ExecuteConsoleCommand(string command, bool deferred);
     void WaitForIdle();
     void WaitForFrames(ulong frames);
-    void CaptureScreenshot(string filePath, bool panorama);
+    void CaptureScreenshot(string filePath, bool panorama, int width = 0, int height = 0);
     Task<bool> CaptureDone { get; }
     Task StopAsync();
     void NotifyFocus(bool focused);
@@ -43,7 +43,8 @@ public interface IRenderSurface
     bool IsReady { get; }
     string DeviceName { get; }
     void Resize(int width, int height);
-    Task<bool> CaptureAsync(string path);
+    Task<bool> CaptureAsync(string path, int width = 0, int height = 0);
+    Task<bool> CapturePanoramaAsync(string path, int width = 0, int height = 0);
     void FocusChild();
     void SetVsync(bool vsync);
     void SetHdr(bool hdr);

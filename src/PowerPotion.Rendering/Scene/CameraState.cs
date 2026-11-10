@@ -20,6 +20,8 @@ internal sealed class CameraState
     public float OrthoBottom = -3f;
     public float OrthoTop = 3f;
     public bool TwoPointPerspective;
+    public bool AutoExposure = true;
+    public float Exposure;
     public float Near = 0.1f;
     public float Far = 500f;
     public uint Width = 1;
@@ -52,6 +54,8 @@ internal sealed class CameraState
             OrthoTop = camera.OrthoTop;
         }
         TwoPointPerspective = camera.TwoPointPerspective;
+        AutoExposure = camera.AutoExposure;
+        Exposure = camera.Exposure;
         HasCamera = true;
         Rebuild();
     }
