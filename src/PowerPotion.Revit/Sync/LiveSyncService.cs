@@ -48,6 +48,8 @@ public sealed class LiveSyncService : IDisposable
     private bool _forceNextSend;
     private ulong _lastSceneSignature;
     private DateTime _lastCameraPush = DateTime.MinValue;
+    private DateTime _lastSectionPush = DateTime.MinValue;
+    private string _lastSectionSignature = "";
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private ExternalEvent? _exportEvent;
     private bool _retryExportScheduled;
@@ -167,6 +169,7 @@ public sealed class LiveSyncService : IDisposable
         {
             ExportAndSendWorld(fullExport: true);
             if (!_liveUpdatesPaused) PushCamera();
+            PushSectionPlanes(force: true);
         }
         finally
         {
@@ -465,6 +468,12 @@ public sealed class LiveSyncService : IDisposable
         {
             PushCamera();
         }
+
+        // Section-box changes do not always raise DocumentChanged; poll at 2 Hz.
+        if (!_liveUpdatesPaused && DateTime.UtcNow - _lastSectionPush >= TimeSpan.FromMilliseconds(500))
+        {
+            PushSectionPlanes();
+        }
     }
 
     // ------------------------------------------------------------------
@@ -671,6 +680,10 @@ public sealed class LiveSyncService : IDisposable
             await MessageCodec.SendAsync(stream, MessageType.WorldSnapshot, w => MessageCodec.WriteWorld(w, world));
             // sun lives in the world message; also push the camera right after
             await MessageCodec.SendAsync(stream, MessageType.CameraUpdate, w => MessageCodec.WriteCamera(w, world.Camera));
+            var sectionPlanes = _lastContext?.GetSectionPlanes() ?? Array.Empty<float>();
+            if (sectionPlanes.Length > 0)
+                await MessageCodec.SendAsync(stream, MessageType.SectionPlanesUpdate,
+                    w => MessageCodec.WriteSectionPlanes(w, sectionPlanes));
             LogLine("World sent.");
             _initialWorldSent = true;
         }
@@ -699,6 +712,12 @@ public sealed class LiveSyncService : IDisposable
             var up = EngineSpace.Vector(orientation.UpDirection);
             var quat = EngineSpace.CameraQuaternion(forward, up);
 
+            // Revit's two-point perspective keeps the camera up axis vertical; detect it from
+            // the engine-space up vector (world Z -> engine +Y).
+            bool twoPoint = view.IsPerspective &&
+                            MathF.Abs((float)up.Item1) < 1e-3f &&
+                            MathF.Abs((float)up.Item3) < 1e-3f;
+
             var camera = new CameraUpdate
             {
                 PosX = (float)eye.Item1,
@@ -713,9 +732,25 @@ public sealed class LiveSyncService : IDisposable
                 OrthoBottom = _lastContext?.World.Camera.OrthoBottom ?? -3f,
                 OrthoTop = _lastContext?.World.Camera.OrthoTop ?? 3f,
                 AutoExposure = true,
+                TwoPointPerspective = twoPoint,
             };
             _lastCameraPush = DateTime.UtcNow;
             _ = SendAsync(MessageType.CameraUpdate, w => MessageCodec.WriteCamera(w, camera));
+        }
+        catch { }
+    }
+
+    /// <summary>P4: pushes the active view section box (or an empty list) when it changes.</summary>
+    private void PushSectionPlanes(bool force = false)
+    {
+        try
+        {
+            var planes = _lastContext?.GetSectionPlanes() ?? Array.Empty<float>();
+            var signature = string.Join(",", planes);
+            if (!force && signature == _lastSectionSignature) return;
+            _lastSectionSignature = signature;
+            _lastSectionPush = DateTime.UtcNow;
+            _ = SendAsync(MessageType.SectionPlanesUpdate, w => MessageCodec.WriteSectionPlanes(w, planes));
         }
         catch { }
     }

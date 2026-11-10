@@ -544,7 +544,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
     {
         for (int i = 0; i < MaxFramesInFlight; i++)
         {
-            _sceneUniformBuffers[i] = _allocator.CreateBuffer(448, BufferUsageFlags.UniformBufferBit,
+            _sceneUniformBuffers[i] = _allocator.CreateBuffer(592, BufferUsageFlags.UniformBufferBit,
                 MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, $"scene uniform {i}");
             _sceneUniformMapped[i] = _sceneUniformBuffers[i]!.Mapped;
         }
@@ -739,7 +739,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
 
     private void UpdateSceneUniforms(int frame)
     {
-        var data = new float[112];
+        var data = new float[148];
         Array.Copy(_camera.ViewProjection, data, 16);
         data[16] = _camera.Position.X;
         data[17] = _camera.Position.Y;
@@ -784,8 +784,34 @@ public sealed unsafe class VulkanRenderer : IDisposable
         var forward = new Vec3(-_camera.Rotation[8], -_camera.Rotation[9], -_camera.Rotation[10]);
         data[108] = forward.X; data[109] = forward.Y; data[110] = forward.Z; data[111] = 0f;
 
+        // P4 section planes: xyzd, dot(n, p) + d >= 0 is visible.
+        for (int i = 0; i < _sectionPlaneCount; i++)
+        {
+            int o = 112 + i * 4;
+            data[o] = _sectionPlanes[i * 4];
+            data[o + 1] = _sectionPlanes[i * 4 + 1];
+            data[o + 2] = _sectionPlanes[i * 4 + 2];
+            data[o + 3] = _sectionPlanes[i * 4 + 3];
+        }
+        data[144] = _sectionPlaneCount;
+        data[145] = (float)_clock.Elapsed.TotalSeconds; // water animation time
+        data[146] = 0f;
+        data[147] = 0f;
+
         fixed (float* p = data)
-            System.Buffer.MemoryCopy(p, (void*)_sceneUniformMapped[frame], 448, 448);
+            System.Buffer.MemoryCopy(p, (void*)_sceneUniformMapped[frame], 592, 592);
+    }
+
+    /// <summary>P4: sets up to 8 world-space clip planes (xyzd; dot(n,p)+d &gt;= 0 is kept).</summary>
+    public void SetSectionPlanes(float[] planes)
+    {
+        if (planes == null) planes = Array.Empty<float>();
+        int count = Math.Min(planes.Length / 4, MaxSectionPlanes);
+        _sectionPlaneCount = count;
+        Array.Clear(_sectionPlanes);
+        if (count > 0)
+            Array.Copy(planes, _sectionPlanes, count * 4);
+        Write($"section: {count} plane(s)");
     }
 
     public void ApplyWorld(WorldSnapshot world, bool applyCamera = true)
@@ -836,6 +862,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         _vk.DeviceWaitIdle(_device);
         var old = _scene;
         _scene = new GpuScene(_context, _allocator, _materialBuffer, _lightBuffer, _textures, latest, _camera);
+        _camera.SetSceneBounds(_scene.BoundsMin, _scene.BoundsMax);
         old?.Dispose();
         _allocator.CollectGarbage(0);
         _sceneDrawCalls = 0;
@@ -892,9 +919,9 @@ public sealed unsafe class VulkanRenderer : IDisposable
             var draw = _scene.Draws[i];
             if (draw.FrontMaterial != index && draw.BackMaterial != index) continue;
             bool doubleSided = material.DoubleSided || draw.BackMaterial != draw.FrontMaterial;
-            bool transparent = material.Opacity < 0.999f;
+            bool transparent = material.Opacity < 0.999f || material.IsSolidGlass || material.MaterialType == 2;
             _scene.Draws[i] = new SceneDraw(draw.ModelIndex, draw.Matrix, draw.StartIndex, draw.IndexCount,
-                draw.FrontMaterial, draw.BackMaterial, doubleSided, transparent, draw.Distance);
+                draw.FrontMaterial, draw.BackMaterial, doubleSided, transparent, draw.Distance, draw.Center);
         }
         MaterialUpdateMilliseconds = timer.Elapsed.TotalMilliseconds;
         Write($"scene: material {material.Id} updated at index {index} in {MaterialUpdateMilliseconds:0.##} ms");
@@ -1210,10 +1237,19 @@ public sealed unsafe class VulkanRenderer : IDisposable
                 DrawSceneItem(commandBuffer, draws[i]);
         }
 
-        // Transparent draws are sorted far-to-near for the simple P2 blend pass.
-        var transparent = draws.Where(d => d.Transparent).OrderByDescending(d => d.Distance);
+        // P4: transparent draws are sorted per frame by distance from the current camera.
+        var cameraPos = _camera.Position;
+        var transparent = draws
+            .Where(d => d.Transparent)
+            .OrderByDescending(d => DistanceSquared(d.Center, cameraPos));
         foreach (var draw in transparent)
             DrawSceneItem(commandBuffer, draw);
+    }
+
+    private static float DistanceSquared(Vec3 a, Vec3 b)
+    {
+        float dx = a.X - b.X, dy = a.Y - b.Y, dz = a.Z - b.Z;
+        return dx * dx + dy * dy + dz * dz;
     }
 
     private void DrawSceneItem(CommandBuffer commandBuffer, SceneDraw draw)

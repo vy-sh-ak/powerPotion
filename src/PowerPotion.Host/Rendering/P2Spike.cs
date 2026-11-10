@@ -262,7 +262,7 @@ public static class P2Spike
             checkerBlue / (double)total, bright / (double)total, light / (double)total, hash);
     }
 
-    private static ModelDto Box(int id, int material, float x0, float y0, float z0, float x1, float y1, float z1)
+    internal static ModelDto Box(int id, int material, float x0, float y0, float z0, float x1, float y1, float z1)
     {
         var positions = new List<float>();
         var normals = new List<float>();

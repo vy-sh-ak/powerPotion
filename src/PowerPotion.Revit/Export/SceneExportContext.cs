@@ -15,6 +15,7 @@ public sealed class SceneExportContext : IExportContext
 {
     private readonly Document _document;
     private readonly RevitMaterialParser _materials;
+    private readonly View3D? _view;
     private readonly WorldSnapshot _world;
 
     // element-level state
@@ -46,11 +47,60 @@ public sealed class SceneExportContext : IExportContext
     {
         _document = document;
         _materials = materials;
+        _view = view;
         _world = new WorldSnapshot
         {
             DocumentName = Path.GetFileName(document.Title ?? "document"),
             ViewName = view?.Name ?? "3D View",
         };
+    }
+
+    /// <summary>
+    /// P4: the active 3D view section box as up to six engine-space clip planes (xyzd).
+    /// Plane convention: <c>dot(normal, p) + d &gt;= 0</c> is inside the kept volume.
+    /// </summary>
+    public float[] GetSectionPlanes()
+    {
+        try
+        {
+            if (_view == null || !_view.IsSectionBoxActive) return Array.Empty<float>();
+            var box = _view.GetSectionBox();
+            if (box == null) return Array.Empty<float>();
+
+            float minX = float.MaxValue, minY = float.MaxValue, minZ = float.MaxValue;
+            float maxX = float.MinValue, maxY = float.MinValue, maxZ = float.MinValue;
+            for (int xi = 0; xi < 2; xi++)
+            {
+                for (int yi = 0; yi < 2; yi++)
+                {
+                    for (int zi = 0; zi < 2; zi++)
+                    {
+                        var point = box.Transform.OfPoint(new XYZ(
+                            xi == 0 ? box.Min.X : box.Max.X,
+                            yi == 0 ? box.Min.Y : box.Max.Y,
+                            zi == 0 ? box.Min.Z : box.Max.Z));
+                        var e = EngineSpace.Point(point);
+                        minX = MathF.Min(minX, (float)e.X); maxX = MathF.Max(maxX, (float)e.X);
+                        minY = MathF.Min(minY, (float)e.Y); maxY = MathF.Max(maxY, (float)e.Y);
+                        minZ = MathF.Min(minZ, (float)e.Z); maxZ = MathF.Max(maxZ, (float)e.Z);
+                    }
+                }
+            }
+
+            return new[]
+            {
+                1f, 0f, 0f, -minX,   // x >= minX
+                -1f, 0f, 0f, maxX,   // x <= maxX
+                0f, 1f, 0f, -minY,   // y >= minY
+                0f, -1f, 0f, maxY,   // y <= maxY
+                0f, 0f, 1f, -minZ,   // z >= minZ
+                0f, 0f, -1f, maxZ,   // z <= maxZ
+            };
+        }
+        catch
+        {
+            return Array.Empty<float>();
+        }
     }
 
     // ------------------------------------------------------------------
@@ -392,6 +442,9 @@ public sealed class SceneExportContext : IExportContext
                 PosZ = (float)eye.Item3,
                 QuatX = quat.X, QuatY = quat.Y, QuatZ = quat.Z, QuatW = quat.W,
                 AutoExposure = true,
+                TwoPointPerspective = view.IsPerspective &&
+                                      MathF.Abs((float)up.Item1) < 1e-3f &&
+                                      MathF.Abs((float)up.Item3) < 1e-3f,
             };
 
             if (cameraInfo != null)

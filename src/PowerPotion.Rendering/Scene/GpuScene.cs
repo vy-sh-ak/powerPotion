@@ -73,6 +73,7 @@ internal readonly struct SceneDraw
 internal sealed unsafe class GpuScene : IDisposable
 {
     private readonly List<GpuModel> _models = new();
+    private bool _hasBounds;
     private bool _disposed;
 
     public GpuScene(VulkanContext context, VulkanAllocator allocator, MaterialBuffer materialBuffer,
@@ -161,9 +162,9 @@ internal sealed unsafe class GpuScene : IDisposable
                     : ResolveMaterial((int)group.BackFaceMaterialId);
                 var dto = MaterialDtos[front];
                 bool doubleSided = dto.DoubleSided || back != front;
-                bool transparent = dto.Opacity < 0.999f;
+                bool transparent = dto.Opacity < 0.999f || dto.IsSolidGlass || dto.MaterialType == 2;
                 Draws.Add(new SceneDraw(modelIndex, matrix, group.StartIndex, group.NumIndices,
-                    front, back, doubleSided, transparent, distance));
+                    front, back, doubleSided, transparent, distance, model.Center));
             }
         }
 
@@ -201,6 +202,8 @@ internal sealed unsafe class GpuScene : IDisposable
     public int InstanceCount { get; }
     public ulong VertexBytes { get; }
     public ulong IndexBytes { get; }
+    public Vec3 BoundsMin { get; private set; }
+    public Vec3 BoundsMax { get; private set; }
     public List<SceneDraw> Draws { get; } = new();
     public List<MaterialDto> MaterialDtos { get; } = new();
     public Dictionary<int, int> MaterialIndexById { get; } = new();
@@ -217,6 +220,23 @@ internal sealed unsafe class GpuScene : IDisposable
         0, 0, 1, 0,
         0, 0, 0, 1,
     };
+
+    private static (Vec3 Center, Vec3 Min, Vec3 Max) BoundsOf(SceneVertex[] vertices)
+    {
+        if (vertices.Length == 0) return (new Vec3(0, 0, 0), new Vec3(0, 0, 0), new Vec3(0, 0, 0));
+
+        float minX = float.MaxValue, minY = float.MaxValue, minZ = float.MaxValue;
+        float maxX = float.MinValue, maxY = float.MinValue, maxZ = float.MinValue;
+        foreach (var v in vertices)
+        {
+            minX = MathF.Min(minX, v.Px); minY = MathF.Min(minY, v.Py); minZ = MathF.Min(minZ, v.Pz);
+            maxX = MathF.Max(maxX, v.Px); maxY = MathF.Max(maxY, v.Py); maxZ = MathF.Max(maxZ, v.Pz);
+        }
+        return (
+            new Vec3((minX + maxX) * 0.5f, (minY + maxY) * 0.5f, (minZ + maxZ) * 0.5f),
+            new Vec3(minX, minY, minZ),
+            new Vec3(maxX, maxY, maxZ));
+    }
 
     public void Dispose()
     {

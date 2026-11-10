@@ -31,6 +31,8 @@ layout(set = 0, binding = 0) uniform SceneUbo {
     vec4 cascadeSplits;
     vec4 shadowParams;  // x sharpness, y bias, z map size, w enabled
     vec4 cameraForward;
+    vec4 sectionPlanes[8]; // xyzd; dot(n,p)+d >= 0 is visible
+    vec4 sectionParams;    // x plane count, y time seconds
 } ubo;
 
 layout(set = 0, binding = 1) readonly buffer MaterialBuffer {
@@ -118,10 +120,19 @@ vec3 fresnelSchlick(float cosTheta, vec3 f0)
 
 void main()
 {
+    // P4 section planes: discard fragments outside the active clip volume.
+    int sectionCount = int(ubo.sectionParams.x);
+    for (int i = 0; i < sectionCount; i++)
+    {
+        if (dot(ubo.sectionPlanes[i].xyz, vWorldPos) + ubo.sectionPlanes[i].w < 0.0)
+            discard;
+    }
+
     int mi = gl_FrontFacing ? pc.frontMaterial : pc.backMaterial;
     if (mi < 0) mi = pc.frontMaterial;
     Material m = materials[mi];
     int materialFlags = int(m.params2.z);
+    int materialType = int(m.params2.y + 0.5);
 
     vec2 uv = gl_FrontFacing ? vUv : vBacksideUv;
     uv = wcsUv(uv, vWorldPos, normalize(vNormal), materialFlags);
@@ -138,6 +149,12 @@ void main()
         alpha *= tex.a;
     }
     albedo *= m.tint.rgb;
+    if (materialType == 1)
+    {
+        // Grass hook: subtle blade-scale variation so large lawn surfaces are not flat.
+        float blades = 0.86 + 0.14 * sin(vWorldPos.x * 9.0) * sin(vWorldPos.z * 9.0 + vWorldPos.y * 3.0);
+        albedo *= blades;
+    }
     if (ubo.options.x > 0.5) albedo = vec3(0.92);
 
     if (alpha < 0.02) discard;
@@ -184,6 +201,18 @@ void main()
         vec3 tangent = normalize(t);
         vec3 bitangent = normalize(cross(n, tangent));
         n = normalize(tangent * tangentNormal.x + bitangent * tangentNormal.y + n * tangentNormal.z);
+    }
+
+    if (materialType == 2)
+    {
+        // Water hook: small animated ripple normal (time comes from the scene UBO).
+        float t = ubo.sectionParams.y;
+        float wave = sin(vWorldPos.x * 2.5 + t * 1.8) * cos(vWorldPos.z * 2.1 + t * 1.3);
+        vec3 tangent = cross(n, vec3(0.0, 1.0, 0.0));
+        if (dot(tangent, tangent) < 1e-6) tangent = vec3(1.0, 0.0, 0.0);
+        tangent = normalize(tangent);
+        vec3 bitangent = normalize(cross(n, tangent));
+        n = normalize(n + tangent * (wave * 0.12) + bitangent * (wave * 0.07));
     }
 
     vec3 v = normalize(ubo.cameraPos.xyz - vWorldPos);
@@ -289,6 +318,31 @@ void main()
     }
 
     color += m.emissive.rgb * max(m.emissive.w, 0.0);
+
+    // P4 glass/refraction: Fresnel-weighted environment reflection plus a refracted
+    // sky tint. (A true screen-space colour fetch arrives with the P5 post pipeline; this
+    // keeps the glass responsive without an extra scene copy.)
+    bool solidGlass = (materialFlags & FLAG_SOLID_GLASS) != 0;
+    if (solidGlass || materialType == 2)
+    {
+        vec3 reflDir = reflect(-v, n);
+        float skyT = clamp(reflDir.y * 0.5 + 0.5, 0.0, 1.0);
+        vec3 skyRefl = mix(vec3(0.04, 0.05, 0.08), vec3(0.32, 0.45, 0.66), skyT);
+        float fres = pow(clamp(1.0 - ndv, 0.0, 1.0), 4.0);
+
+        if (solidGlass)
+        {
+            vec3 refrDir = refract(-v, n, 1.0 / max(m.params2.x, 1.01));
+            vec3 refrTint = albedo * (0.40 + 0.60 * clamp(refrDir.y * 0.5 + 0.5, 0.0, 1.0));
+            color = mix(color, mix(refrTint, skyRefl, clamp(0.18 + 0.82 * fres, 0.0, 1.0)), 0.80);
+            alpha = max(alpha, mix(0.35, 0.95, fres));
+        }
+        else
+        {
+            color = mix(color, skyRefl, clamp(fres + 0.08, 0.0, 0.70));
+            alpha = max(alpha, 0.72);
+        }
+    }
 
     // Simple P2 tonemap + gamma for the UNORM swapchain; P5 replaces this with ACES.
     color = color / (color + vec3(1.0));
