@@ -71,6 +71,9 @@ public sealed unsafe class VulkanRenderer : IDisposable
     private TextureCache _textures = null!;
     private GpuScene? _scene;
     private readonly CameraState _camera = new();
+    private bool _cameraModeLogged;
+    private bool _lastCameraOrtho;
+    private bool _lastCameraTwoPoint;
     private readonly float[] _sectionPlanes = new float[MaxSectionPlanes * 4];
     private int _sectionPlaneCount;
     private const int MaxSectionPlanes = 8;
@@ -962,6 +965,15 @@ public sealed unsafe class VulkanRenderer : IDisposable
     {
         _camera.Update(camera);
         _camera.SetAspect(_swapchainExtent.Width, _swapchainExtent.Height);
+        if (!_cameraModeLogged ||
+            camera.Ortho != _lastCameraOrtho ||
+            camera.TwoPointPerspective != _lastCameraTwoPoint)
+        {
+            _cameraModeLogged = true;
+            _lastCameraOrtho = camera.Ortho;
+            _lastCameraTwoPoint = camera.TwoPointPerspective;
+            Write($"camera mode: {(camera.Ortho ? "ortho" : camera.TwoPointPerspective ? "two-point" : "perspective")}");
+        }
     }
 
     public void ApplySun(SunUpdate sun)

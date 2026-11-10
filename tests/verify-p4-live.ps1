@@ -25,7 +25,8 @@ $hostText = Get-Content $hostLog -Raw
 
 $checks = [ordered]@{
     "standalone renderer launched" = $syncText -match "launching host with renderer='pp'"
-    "camera mode reported"         = $syncText -match "camera mode: (perspective|ortho|two-point)"
+    "camera mode reported"         = ($syncText -match "camera mode: (perspective|ortho|two-point)") -or
+                                     ($hostText -match "renderer: camera mode: (perspective|ortho|two-point)")
     "section planes reported"      = $syncText -match "section planes: \d+"
     "Vulkan renderer ready"        = $hostText -match "Vulkan renderer ready"
     "screen refraction enabled"    = $hostText -match "screen refraction: enabled"

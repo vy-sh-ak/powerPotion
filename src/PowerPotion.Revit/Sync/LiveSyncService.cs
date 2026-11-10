@@ -53,6 +53,8 @@ public sealed class LiveSyncService : IDisposable
     private bool _lastOrtho;
     private bool _lastTwoPoint;
     private bool _cameraModeLogged;
+    private bool _cameraDocMismatchLogged;
+    private bool _cameraErrorLogged;
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private ExternalEvent? _exportEvent;
     private bool _retryExportScheduled;
@@ -711,9 +713,26 @@ public sealed class LiveSyncService : IDisposable
         try
         {
             var uidoc = _uiApp.ActiveUIDocument;
-            if (uidoc?.Document != _document) return;
+            var document = uidoc?.Document;
+            if (document == null || _document == null) return;
+
+            // Revit can hand out different Document wrappers for the same model; compare by
+            // identity first, then by path/title (the same rule the DocumentChanged handler uses).
+            bool sameDocument = ReferenceEquals(document, _document) ||
+                (string.Equals(document.PathName, _document.PathName, StringComparison.OrdinalIgnoreCase) &&
+                 string.Equals(document.Title, _document.Title, StringComparison.Ordinal));
+            if (!sameDocument)
+            {
+                if (!_cameraDocMismatchLogged)
+                {
+                    _cameraDocMismatchLogged = true;
+                    LogLine($"camera push skipped: active document '{document.Title}' differs from '{_document.Title}'");
+                }
+                return;
+            }
+
             var view = _view;
-            if (view == null) return;
+            if (view == null || !view.IsValidObject) return;
 
             var orientation = view.GetOrientation();
             var eye = EngineSpace.Point(orientation.EyePosition);
@@ -755,7 +774,14 @@ public sealed class LiveSyncService : IDisposable
             _lastCameraPush = DateTime.UtcNow;
             _ = SendAsync(MessageType.CameraUpdate, w => MessageCodec.WriteCamera(w, camera));
         }
-        catch { }
+        catch (Exception ex)
+        {
+            if (!_cameraErrorLogged)
+            {
+                _cameraErrorLogged = true;
+                LogLine("camera push failed: " + ex.Message);
+            }
+        }
     }
 
     /// <summary>P4: pushes the active view section box (or an empty list) when it changes.</summary>
