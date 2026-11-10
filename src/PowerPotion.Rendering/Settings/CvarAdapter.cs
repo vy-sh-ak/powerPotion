@@ -26,6 +26,9 @@ public static class CvarAdapter
                 return true;
             case "r_dlss":
                 settings.Dlss = ParseBool(value, true);
+                // `r_dlss` is the compatibility toggle for the FSR-style render-scale path.
+                if (settings.RenderScale >= 0.999)
+                    settings.RenderScale = settings.Dlss ? 0.75 : 1.0;
                 return true;
             case "r_restir":
                 settings.RtArtificialLights = ParseBool(value, true);
@@ -122,6 +125,30 @@ public static class CvarAdapter
                 return true;
             case "r_captureResolution":
                 if (TryDouble(value, out var captureScale)) settings.CaptureResolutionScale = Math.Clamp(captureScale, 0.25, 4);
+                return true;
+            case "r_ssao":
+                if (TryDouble(value, out var ssao)) settings.SsaoStrength = Math.Clamp(ssao, 0, 1);
+                return true;
+            case "r_ssaoRadius":
+                if (TryDouble(value, out var ssaoRadius)) settings.SsaoRadius = Math.Clamp(ssaoRadius, 0.05, 200);
+                return true;
+            case "r_ssgi":
+                if (TryDouble(value, out var ssgi)) settings.SsgiStrength = Math.Clamp(ssgi, 0, 1);
+                return true;
+            case "r_ssgiRadius":
+                if (TryDouble(value, out var ssgiRadius)) settings.SsgiRadius = Math.Clamp(ssgiRadius, 0.001, 0.2);
+                return true;
+            case "r_ssgiFalloff":
+                if (TryDouble(value, out var ssgiFalloff)) settings.SsgiFalloff = Math.Max(0.01, ssgiFalloff);
+                return true;
+            case "r_renderScale":
+                if (TryDouble(value, out var renderScale)) settings.RenderScale = Math.Clamp(renderScale, 0.5, 1.0);
+                return true;
+            case "g_windStrength":
+                if (TryDouble(value, out var wind)) settings.WindStrength = Math.Max(0, wind);
+                return true;
+            case "g_windDirection":
+                if (TryDouble(value, out var windDirection)) settings.WindDirection = windDirection;
                 return true;
             default:
                 return false;

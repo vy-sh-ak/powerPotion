@@ -32,8 +32,18 @@ hooks; see `docs/p4-report.md`.
 
 **P5 status (2026-11-10):** complete — offscreen post pass (exposure/adaptation, bloom,
 saturation, colour temperature, contrast, vignette, chromatic aberration, motion blur, lens
-flare, safe frame), PNG/JPG/EXR capture at explicit resolutions, six-face equirect panorama and
-full `HostSettings` CVar coverage; see `docs/p5-report.md`.
+flare, safe frame), HDR ACES tonemapping, TAA, PNG/JPG/EXR capture (EXR from the HDR target),
+run-length panorama and CvarAdapter coverage; see `docs/p5-report.md`.
+
+**P6 status (2026-11-10):** in progress — SSAO from a linear-depth G-buffer, screen-space GI
+with a depth-weighted denoise, height fog, raymarched clouds with wind, CPU frustum culling and a
+dynamic render-scale/upscale path are implemented and verified; DDGI/OIDN, full FSR 2/3,
+ray-traced shadows/reflections and art modes remain follow-ups; see `docs/p6-report.md`.
+
+**P7 status (2026-11-10):** source cutover complete — `EngineBridge`, `RendererSurface`,
+`EnscapeLocator` and the entire Enscape namespace are removed; the host always uses the standalone
+Vulkan renderer; build/installer/README/architecture docs are updated; `tests/no-enscape.ps1` is
+the CI guard. Clean-machine installer testing remains a manual release check.
 
 ---
 

@@ -17,13 +17,14 @@ internal struct SceneVertex
 internal sealed class GpuModel
 {
     public GpuModel(int id, BufferAllocation vertex, BufferAllocation index, MaterialIndexGroupDto[] groups,
-        Vec3 center)
+        Vec3 center, float radius)
     {
         Id = id;
         Vertex = vertex;
         Index = index;
         Groups = groups;
         Center = center;
+        Radius = radius;
     }
 
     public int Id { get; }
@@ -31,6 +32,7 @@ internal sealed class GpuModel
     public BufferAllocation Index { get; }
     public MaterialIndexGroupDto[] Groups { get; }
     public Vec3 Center { get; }
+    public float Radius { get; }
 
     public void Dispose()
     {
@@ -43,7 +45,7 @@ internal readonly struct SceneDraw
 {
     public SceneDraw(int modelIndex, float[] matrix, uint startIndex, uint indexCount,
         int frontMaterial, int backMaterial, bool doubleSided, bool transparent, float distance,
-        Vec3 center)
+        Vec3 center, float radius)
     {
         ModelIndex = modelIndex;
         Matrix = matrix;
@@ -55,6 +57,7 @@ internal readonly struct SceneDraw
         Transparent = transparent;
         Distance = distance;
         Center = center;
+        Radius = radius;
     }
 
     public int ModelIndex { get; }
@@ -67,6 +70,7 @@ internal readonly struct SceneDraw
     public bool Transparent { get; }
     public float Distance { get; }
     public Vec3 Center { get; }
+    public float Radius { get; }
 }
 
 /// <summary>GPU scene: uploads CPU-built scene data and builds the material-group draw list.</summary>
@@ -113,6 +117,10 @@ internal sealed unsafe class GpuScene : IDisposable
             allocator.UploadBuffer(indexBuffer, MemoryMarshal.AsBytes(upload.Indices.AsSpan()));
 
             var (center, modelMin, modelMax) = BoundsOf(upload.Vertices);
+            float ex = modelMax.X - modelMin.X;
+            float ey = modelMax.Y - modelMin.Y;
+            float ez = modelMax.Z - modelMin.Z;
+            float radius = 0.5f * MathF.Sqrt(ex * ex + ey * ey + ez * ez);
             if (!_hasBounds)
             {
                 BoundsMin = modelMin;
@@ -131,7 +139,7 @@ internal sealed unsafe class GpuScene : IDisposable
                     MathF.Max(BoundsMax.Z, modelMax.Z));
             }
 
-            _models.Add(new GpuModel(upload.Id, vertexBuffer, indexBuffer, upload.Groups, center));
+            _models.Add(new GpuModel(upload.Id, vertexBuffer, indexBuffer, upload.Groups, center, radius));
             VertexBytes += (ulong)(upload.Vertices.Length * sizeof(SceneVertex));
             IndexBytes += (ulong)(upload.Indices.Length * sizeof(uint));
         }
@@ -164,7 +172,7 @@ internal sealed unsafe class GpuScene : IDisposable
                 bool doubleSided = dto.DoubleSided || back != front;
                 bool transparent = dto.Opacity < 0.999f || dto.IsSolidGlass || dto.MaterialType == 2;
                 Draws.Add(new SceneDraw(modelIndex, matrix, group.StartIndex, group.NumIndices,
-                    front, back, doubleSided, transparent, distance, model.Center));
+                    front, back, doubleSided, transparent, distance, model.Center, model.Radius));
             }
         }
 

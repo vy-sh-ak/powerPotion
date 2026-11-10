@@ -5,7 +5,8 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
-using PowerPotion.Host.Enscape;
+using PowerPotion.Host.Interop;
+using PowerPotion.Host.Navigation;
 using PowerPotion.Host.Net;
 using PowerPotion.Host.Rendering;
 using PowerPotion.Protocol;
@@ -18,7 +19,6 @@ public partial class MainWindow : Window
     private readonly IRendererBridge _engine;
     private readonly HostSettings _settings;
     private HostConnection? _connection;
-    private RendererSurface? _surface;
     private VulkanSurface? _vulkanSurface;
     private readonly List<MaterialDto> _materials = new();
     private MaterialDto? _selectedMaterial;
@@ -124,25 +124,8 @@ public partial class MainWindow : Window
             SetStatus("Scene updated.");
             PresentWindow();
 
-            // Right after the first world switch the engine paints its own "chaos Enscape
-            // Loading …" screen in the render window for a moment (shader/texture warm-up).
-            // Keep the branded splash on top for a short settle period, then reveal the renderer.
-            if (_surface is { IsEngineWindowShown: false })
-            {
-                _splash?.SetStatus("Finalizing renderer…");
-                var delay = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
-                delay.Tick += (_, _) =>
-                {
-                    delay.Stop();
-                    _surface?.ShowEngineWindow();
-                    HideLoading();
-                };
-                delay.Start();
-            }
-            else
-            {
-                HideLoading();
-            }
+            // The standalone renderer is revealed as soon as the first scene is committed.
+            HideLoading();
         }
         else
         {
@@ -283,7 +266,7 @@ public partial class MainWindow : Window
         // clicking the toolbar must not steal focus from the buttons.
         Activated += (_, _) =>
         {
-            if (_engine.NativeWindowHandle != IntPtr.Zero && Enscape.Win32.IsOverWindow(_engine.NativeWindowHandle))
+            if (_engine.NativeWindowHandle != IntPtr.Zero && Win32.IsOverWindow(_engine.NativeWindowHandle))
                 _engine.FocusRenderWindow();
         };
         Deactivated += (_, _) => _engine.NotifyFocus(false);
@@ -342,80 +325,33 @@ public partial class MainWindow : Window
         foreach (var cmd in _settings.ToPreInitCommands())
             _engine.PreInitCommands.Add(cmd);
 
-        // Build the renderer surface once loaded.
+        // Build the standalone Vulkan render surface once loaded.
         Loaded += (_, _) =>
         {
-            if (_surface != null || _vulkanSurface != null) return;
+            if (_vulkanSurface != null) return;
 
+            HostLog.Write("MainWindow.Loaded → creating VulkanSurface (standalone renderer)");
+            var surface = new VulkanSurface();
+            _vulkanSurface = surface;
             if (_engine is RendererBridge rendererBridge)
-            {
-                HostLog.Write("MainWindow.Loaded → creating VulkanSurface (standalone renderer)");
-                var surface = new VulkanSurface();
-                _vulkanSurface = surface;
                 rendererBridge.AttachSurface(surface);
-                surface.Log += m =>
-                {
-                    HostLog.Write("renderer: " + m);
-                    SetStatus(m);
-                };
-                surface.Ready += () =>
-                {
-                    HostLog.Write("VulkanSurface.Ready → applying visual settings");
-                    _engineReady = true;
-                    _nav.SetRenderWindow(surface.ChildHwnd);
-                    _nav.Enabled = true;
-                    SetStatus("Renderer ready (Vulkan P0).");
-                    ApplySettings();
-                    _nav.ApplyModeToEngine();
-                    UpdateNavigationUi();
-                    PresentWindow();
-                    HideLoading();
-                    _ = _connection?.SendEngineReadyAsync(true, "");
-                    if (_pendingWorld != null)
-                    {
-                        var world = _pendingWorld;
-                        _pendingWorld = null;
-                        OnWorld(world);
-                    }
-                };
-                surface.Failed += ex =>
-                {
-                    HostLog.Exception("VulkanSurface.Failed", ex);
-                    ShowLoading("Renderer failed to start — see logs.");
-                    PresentWindow();
-                    _ = _connection?.SendEngineReadyAsync(false, ex.Message);
-                };
-                SurfaceHost.Children.Add(surface);
-                return;
-            }
-
-            HostLog.Write("MainWindow.Loaded → creating RendererSurface");
-            if (_engine is not EngineBridge engineBridge)
+            surface.Log += m =>
             {
-                ShowLoading("Unsupported renderer bridge.");
-                PresentWindow();
-                return;
-            }
-            _surface = new RendererSurface(engineBridge, () => DocLabel.Text);
-            _surface.Log += m => SetStatus(m);
-            _surface.EngineReady += () =>
+                HostLog.Write("renderer: " + m);
+                SetStatus(m);
+            };
+            surface.Ready += () =>
             {
-                HostLog.Write("RendererSurface.EngineReady → applying visual settings");
+                HostLog.Write("VulkanSurface.Ready → applying visual settings");
                 _engineReady = true;
-                _nav.SetRenderWindow(_engine.NativeWindowHandle);
+                _nav.SetRenderWindow(surface.ChildHwnd);
                 _nav.Enabled = true;
-                SetStatus("Renderer ready.");
+                SetStatus("Renderer ready (Vulkan).");
                 ApplySettings();
                 _nav.ApplyModeToEngine();
                 UpdateNavigationUi();
-                if (_pendingWorld == null)
-                {
-                    // Do not reveal the native window yet: the engine paints its own "Enscape"
-                    // splash there until it has a scene, and that native splash used to appear
-                    // behind the branded loader. The window is shown on the first world commit.
-                    ShowLoading("Renderer ready — waiting for scene from Revit…");
-                    if (!_connectedToRevit) PresentWindow();
-                }
+                PresentWindow();
+                HideLoading();
                 _ = _connection?.SendEngineReadyAsync(true, "");
                 if (_pendingWorld != null)
                 {
@@ -424,17 +360,14 @@ public partial class MainWindow : Window
                     OnWorld(world);
                 }
             };
-            _surface.EngineFailed += ex =>
+            surface.Failed += ex =>
             {
-                HostLog.Exception("RendererSurface.EngineFailed", ex);
+                HostLog.Exception("VulkanSurface.Failed", ex);
                 ShowLoading("Renderer failed to start — see logs.");
                 PresentWindow();
-                var hide = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-                hide.Tick += (_, _) => { hide.Stop(); HideLoading(); };
-                hide.Start();
                 _ = _connection?.SendEngineReadyAsync(false, ex.Message);
             };
-            SurfaceHost.Children.Add(_surface);
+            SurfaceHost.Children.Add(surface);
         };
 
         BuildSettingsPanel();

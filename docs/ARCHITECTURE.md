@@ -1,9 +1,18 @@
 # PowerPotion — Architecture & Reverse-Engineering Notes
 
-PowerPotion is a clean-room, personalized re-implementation of the **Chaos Enscape 4.7.0.57 Revit plugin**,
-built from static evidence gathered with the REA reverse-engineering toolkit on the installed product
-(`C:\Program Files\Enscape`). It keeps the rendering functionality (real-time render, materials, lights,
-sun/cloud/sky), removes VR and authentication/licensing, and adds its own installer/uninstaller.
+> **P7 cutover note:** this document is a **historical** reverse-engineering audit of the
+> Chaos Enscape 4.7.0.57 product. Since P4–P7, PowerPotion has shipped its **own standalone
+> Vulkan renderer** (`src/PowerPotion.Rendering`) and no longer loads, references, or requires
+> Enscape. The Enscape descriptions below document the reference product that informed the
+> clean-room design; they are not a runtime dependency of the shipped product. See
+> `renderer-plan.md` and `docs/p3-report.md` … `docs/p6-report.md` for the implemented renderer.
+
+PowerPotion is a clean-room, personalized re-implementation of the **Chaos Enscape 4.7.0.57 Revit
+plugin's feature set**, built from static evidence gathered with the REA reverse-engineering toolkit
+on the installed product (`C:\Program Files\Enscape`). It keeps the rendering functionality
+(real-time render, materials, lights, sun/cloud/sky, post/capture), removes VR and
+authentication/licensing, and adds its own installer/uninstaller. Rendering is performed by
+PowerPotion's own Vulkan 1.3 renderer.
 
 ## What was reverse engineered (evidence-backed)
 
@@ -55,7 +64,7 @@ Key facts that shaped PowerPotion's design:
    camera math, and sun vector code): engine space is **meters, right-handed, Y-up**, Revit
    (X,Y,Z) ft → engine (X, Z, −Y) m. North = −Z engine. Camera forward = −Z (OpenGL style).
 
-### PowerPotion's architecture (clean-room)
+### PowerPotion's architecture (implemented, standalone)
 
 ```
 Revit 2026
@@ -64,11 +73,14 @@ Revit 2026
       ├─ Sync: DocumentObserver (DocumentChanged → debounced re-export),
       │        CameraSynchronizer (Idling → engine-space camera), HostLauncher
       └─ PowerPotion.Protocol ←→ TCP loopback ←→ PowerPotion.Host.exe --port <n>  (WPF)
-           ├─ Enscape/EngineBridge — loads installed Enscape.RendererApi.dll + native engine
-           │   (no license calls, no VR, no accounts, no telemetry)
-           ├─ MainWindow: HwndHost embedding + WPF toolbar (visual settings, sky/cloud/sun, quality, capture)
+           ├─ Rendering/VulkanSurface — child HWND + standalone Vulkan renderer
+           │   (PowerPotion.Rendering; no external engine, no license calls, no VR/accounts/telemetry)
+           ├─ MainWindow: HwndHost + WPF toolbar (visual settings, sky/cloud/sun, quality, capture)
            └─ Panels: MaterialEditor, VisualSettings, SkySettings, SunSettings, CaptureSettings
 ```
+
+The Enscape API/layout notes earlier in this document describe the audited reference product; the
+shipped PowerPotion host does not load `Enscape.RendererApi.dll` or the native engine.
 
 Both processes exchange `PowerPotion.Protocol` messages (length-prefixed little-endian binary frames).
 

@@ -6,6 +6,7 @@ layout(location = 2) in vec2 vUv;
 layout(location = 3) in vec2 vBacksideUv;
 
 layout(location = 0) out vec4 outColor;
+layout(location = 1) out vec4 outDepth;
 
 struct Material {
     vec4 diffuse;   // rgb, opacity
@@ -33,6 +34,7 @@ layout(set = 0, binding = 0) uniform SceneUbo {
     vec4 cameraForward;
     vec4 sectionPlanes[8]; // xyzd; dot(n,p)+d >= 0 is visible
     vec4 sectionParams;    // x plane count, y time seconds
+    vec4 fogParams;        // x amount, y height, z density, w time
 } ubo;
 
 layout(set = 0, binding = 1) readonly buffer MaterialBuffer {
@@ -360,6 +362,17 @@ void main()
         }
     }
 
-    // Linear HDR output; ACES tonemapping happens in the post pass.
+    // Height fog (P6): denser near the configured height, falling off upward.
+    float fogAmount = ubo.fogParams.x;
+    if (fogAmount > 0.001)
+    {
+        float heightFalloff = exp(-max(vWorldPos.y - ubo.fogParams.y, 0.0) * 0.08);
+        float distanceToEye = length(ubo.cameraPos.xyz - vWorldPos);
+        float fogFactor = 1.0 - exp(-distanceToEye * fogAmount * heightFalloff * 0.015);
+        color = mix(color, vec3(0.62, 0.70, 0.78), clamp(fogFactor, 0.0, 0.95));
+    }
+
+    // Linear HDR output + linear view depth for SSAO; ACES happens in the post pass.
+    outDepth = vec4(dot(vWorldPos - ubo.cameraPos.xyz, ubo.cameraForward.xyz), 0.0, 0.0, 1.0);
     outColor = vec4(color, alpha);
 }

@@ -16,7 +16,7 @@ namespace PowerPotion.Rendering.Scene;
 internal sealed unsafe class SkyRenderer : IDisposable
 {
     private const int Frames = 3;
-    private const int UboSize = 160;
+    private const int UboSize = 192;
 
     private readonly VulkanContext _context;
     private readonly VulkanAllocator _allocator;
@@ -213,17 +213,26 @@ internal sealed unsafe class SkyRenderer : IDisposable
                 ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit |
                                  ColorComponentFlags.BBit | ColorComponentFlags.ABit,
             };
+            var linearDepthBlendAttachment = new PipelineColorBlendAttachmentState
+            {
+                BlendEnable = false,
+                ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit |
+                                 ColorComponentFlags.BBit | ColorComponentFlags.ABit,
+            };
+            var blendAttachments = new[] { blendAttachment, linearDepthBlendAttachment };
             var blend = new PipelineColorBlendStateCreateInfo
             {
                 SType = StructureType.PipelineColorBlendStateCreateInfo,
                 LogicOpEnable = false,
-                AttachmentCount = 1,
-                PAttachments = &blendAttachment,
+                AttachmentCount = 2,
+                PAttachments = null,
             };
             var dynamicStates = new[] { DynamicState.Viewport, DynamicState.Scissor };
             fixed (PipelineShaderStageCreateInfo* stagePtr = stages)
             fixed (DynamicState* dynPtr = dynamicStates)
+            fixed (PipelineColorBlendAttachmentState* blendPtr = blendAttachments)
             {
+                blend.PAttachments = blendPtr;
                 var dynamic = new PipelineDynamicStateCreateInfo
                 {
                     SType = StructureType.PipelineDynamicStateCreateInfo,
@@ -413,9 +422,10 @@ internal sealed unsafe class SkyRenderer : IDisposable
         }
     }
 
-    public void Update(int frame, CameraState camera, SunInfo sun, RendererSettings settings, bool whiteMode)
+    public void Update(int frame, CameraState camera, SunInfo sun, RendererSettings settings, bool whiteMode,
+        float time)
     {
-        var data = new float[40];
+        var data = new float[48];
         var inv = Mat4.Invert(camera.ViewProjection);
         Array.Copy(inv, data, 16);
         data[16] = camera.Position.X; data[17] = camera.Position.Y; data[18] = camera.Position.Z; data[19] = 1f;
@@ -428,6 +438,14 @@ internal sealed unsafe class SkyRenderer : IDisposable
         data[37] = (float)settings.SkyboxBrightness;
         data[38] = settings.SkyboxUseSunSpot ? 1f : 0f;
         data[39] = (float)settings.MoonSize;
+        data[40] = (float)settings.CloudDensity;
+        data[41] = (float)settings.CloudCirrus;
+        data[42] = (float)settings.CloudVariety;
+        data[43] = time;
+        data[44] = (float)settings.CloudOffsetX;
+        data[45] = (float)settings.CloudOffsetZ;
+        data[46] = (float)settings.WindStrength;
+        data[47] = (float)(settings.WindDirection * Math.PI / 180.0);
 
         fixed (float* p = data)
             System.Buffer.MemoryCopy(p, (void*)_mapped[frame], UboSize, UboSize);

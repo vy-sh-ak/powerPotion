@@ -301,6 +301,7 @@ public sealed unsafe class VulkanContext : IDisposable
         {
             SamplerAnisotropy = supportedFeatures.SamplerAnisotropy,
             ShaderClipDistance = supportedFeatures.ShaderClipDistance,
+            IndependentBlend = supportedFeatures.IndependentBlend,
         };
 
         try

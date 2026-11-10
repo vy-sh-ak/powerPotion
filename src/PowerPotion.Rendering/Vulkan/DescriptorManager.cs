@@ -347,7 +347,7 @@ public sealed unsafe class DescriptorManager : IDisposable
             {
                 Buffer = uniformBuffers[i]!.Buffer,
                 Offset = 0,
-                Range = 592,
+                Range = 608,
             };
             var ssboInfo = new DescriptorBufferInfo
             {

@@ -4,8 +4,8 @@ using PowerPotion.Rendering.Settings;
 namespace PowerPotion.Rendering;
 
 /// <summary>
-/// The renderer seam the host UI already talks to (the shape of the old <c>EngineBridge</c>).
-/// <see cref="Host.Enscape.EngineBridge"/> and <see cref="RendererBridge"/> both implement it.
+/// The renderer seam the host UI talks to. <see cref="RendererBridge"/> implements it over the
+/// standalone Vulkan renderer.
 /// </summary>
 public interface IRendererBridge : IDisposable
 {

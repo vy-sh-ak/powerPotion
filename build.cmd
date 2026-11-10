@@ -10,23 +10,16 @@ setlocal enabledelayedexpansion
 
 set REPO=%~dp0
 set REVIT_DIR=C:\Program Files\Autodesk\Revit 2026
-set ENSCAPE_DIR=C:\Program Files\Enscape\RendererHost
 set CONFIGURATION=Release
 
 echo === PowerPotion build ===
 echo Repo:       %REPO%
 echo Revit:      %REVIT_DIR%
-echo Enscape:    %ENSCAPE_DIR%
 echo.
 
 if not exist "%REVIT_DIR%\RevitAPI.dll" (
     echo ERROR: RevitAPI.dll not found under "%REVIT_DIR%".
     echo        Edit REVIT_DIR in build.cmd to point at your Revit 2026 install.
-    exit /b 1
-)
-if not exist "%ENSCAPE_DIR%\Enscape.RendererApi.dll" (
-    echo ERROR: Enscape.RendererApi.dll not found under "%ENSCAPE_DIR%".
-    echo        Install Enscape 4.7+ or edit ENSCAPE_DIR in build.cmd.
     exit /b 1
 )
 
@@ -35,7 +28,7 @@ dotnet build "%REPO%src\PowerPotion.Protocol\PowerPotion.Protocol.csproj" -c %CO
 if errorlevel 1 goto :fail
 
 echo [2/4] Renderer host...
-dotnet build "%REPO%src\PowerPotion.Host\PowerPotion.Host.csproj" -c %CONFIGURATION% -v q -nologo -p:EnscapeDir="%ENSCAPE_DIR%"
+dotnet build "%REPO%src\PowerPotion.Host\PowerPotion.Host.csproj" -c %CONFIGURATION% -v q -nologo
 if errorlevel 1 goto :fail
 
 echo [3/4] Revit add-in...

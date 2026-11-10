@@ -29,6 +29,7 @@ internal sealed class CameraState
     public float Aspect = 1f;
     public float TanHalfFovY = 1f;
     public float[] ViewProjection = Mat4.Identity();
+    public float[] Projection = Mat4.Identity();
     public float JitterX;
     public float JitterY;
 
@@ -132,6 +133,7 @@ internal sealed class CameraState
             projection[8] -= JitterX;
             projection[9] -= JitterY;
         }
+        Projection = projection;
         ViewProjection = Mat4.Multiply(projection, view);
     }
 

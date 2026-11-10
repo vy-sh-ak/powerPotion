@@ -3,29 +3,24 @@ Copyright (c) 2026
 
 PERSONAL/EDUCATIONAL USE LICENSE
 
-PowerPotion is a clean-room, personalized companion for Autodesk Revit that reuses the
-rendering engine of your separately installed Enscape product at runtime, through the
-managed API assembly that Enscape itself ships (Enscape.RendererApi.dll).
+PowerPotion is a clean-room, personalized companion for Autodesk Revit. It ships its own
+standalone Vulkan 1.3 renderer and does not load, link to, modify or redistribute any
+Chaos/Enscape binary, shader, texture or other asset.
 
 1. What this software does
    • Adds a "PowerPotion" ribbon tab to Revit 2026 with real-time rendering,
      material editing, sun/location, sky/cloud/fog, quality and capture controls.
-   • Loads the native Enscape engine from your licensed Enscape installation and
-     embeds its render window in its own host process.
+   • Renders with PowerPotion's own Vulkan renderer in its own host process.
    • Contains no VR, account, telemetry or license-activation functionality.
 
 2. What this software does NOT do
-   • It does not modify, patch, decode, redistribute or bypass any Chaos/Enscape
-     binary, protection or entitlement mechanism. Any license enforcement that the
-     Enscape engine performs internally remains fully in effect.
-   • It does not include any Chaos-owned code or assets.
+   • It does not include, copy or modify any Chaos-owned code or assets.
+   • It does not require or use an Enscape installation.
 
 3. Requirements on your part
-   • A valid, separately obtained Enscape license. PowerPotion is a companion UI,
-     not a replacement for one. If your Enscape installation is unlicensed or its
-     trial has ended, the engine may refuse to render — by design.
    • Autodesk Revit 2026, licensed separately.
-   • Use within the scope of the licenses you hold for Revit and Enscape.
+   • Windows 10/11 x64 with a Vulkan 1.3-capable GPU.
+   • Use within the scope of the licenses you hold for Revit and any other tools you use.
 
 4. Warranty and liability
    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR

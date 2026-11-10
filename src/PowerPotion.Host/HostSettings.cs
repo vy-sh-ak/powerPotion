@@ -50,6 +50,16 @@ public sealed class HostSettings
     public double ExposureAdaptionSpeed { get; set; } = 1;// r_exposureAdaptionSpeed
     public double LightBrightness { get; set; } = 1;      // r_lightBrightness
 
+    // --- P6 quality ---
+    public double SsaoStrength { get; set; } = 0.6;        // r_ssao
+    public double SsaoRadius { get; set; } = 5.0;          // r_ssaoRadius
+    public double SsgiStrength { get; set; } = 0.6;        // r_ssgi
+    public double SsgiRadius { get; set; } = 0.03;         // r_ssgiRadius
+    public double SsgiFalloff { get; set; } = 4.0;         // r_ssgiFalloff
+    public double RenderScale { get; set; } = 1.0;         // r_renderScale
+    public double WindStrength { get; set; } = 0.5;        // g_windStrength
+    public double WindDirection { get; set; } = 0;         // g_windDirection (degrees)
+
     // --- artistic modes ---
     public bool WhiteBackground { get; set; } = false;     // r_whiteBackground
 
@@ -134,5 +144,13 @@ public sealed class HostSettings
         ($"r_whiteBackground {I(WhiteBackground)}", true),
         ($"r_showCaptureSafeFrame {I(ShowSafeFrame)}", true),
         ($"r_captureResolution {I(CaptureResolutionScale)}", true),
+        ($"r_ssao {I(SsaoStrength)}", true),
+        ($"r_ssaoRadius {I(SsaoRadius)}", true),
+        ($"r_ssgi {I(SsgiStrength)}", true),
+        ($"r_ssgiRadius {I(SsgiRadius)}", true),
+        ($"r_ssgiFalloff {I(SsgiFalloff)}", true),
+        ($"r_renderScale {I(RenderScale)}", true),
+        ($"g_windStrength {I(WindStrength)}", true),
+        ($"g_windDirection {I(WindDirection)}", true),
     };
 }

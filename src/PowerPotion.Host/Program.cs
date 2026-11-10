@@ -3,7 +3,6 @@ using System.Net.Sockets;
 using System.Windows;
 using System.Windows.Threading;
 using PowerPotion.Host;
-using PowerPotion.Host.Enscape;
 using PowerPotion.Host.Net;
 using PowerPotion.Host.Rendering;
 using PowerPotion.Rendering;
@@ -15,7 +14,7 @@ public static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        const string usage = "PowerPotion.Host --port <n> [--doc <name>] | --selftest [--frames N] [--shot <path>] | --p0 [--shot <path>] [--seconds N] [--resize] | --p1 [--shot <path>] | --p2 [--shot <path>] | --p3 [--shot <path>] | --p4 [--shot <path>] | --p5 [--shot <path>] | --locate";
+        const string usage = "PowerPotion.Host --port <n> [--doc <name>] | --selftest [--shot <path>] | --p0 [--shot <path>] [--seconds N] [--resize] | --p1 [--shot <path>] | --p2 [--shot <path>] | --p3 [--shot <path>] | --p4 [--shot <path>] | --p5 [--shot <path>] | --p6 [--shot <path>] | --locate";
         int port = 0;
         string doc = "";
         bool selftest = false;
@@ -25,9 +24,9 @@ public static class Program
         bool p3 = false;
         bool p4 = false;
         bool p5 = false;
+        bool p6 = false;
         bool resizeTest = false;
         string? shot = null;
-        int frames = 60;
         int seconds = 6;
 
         for (int i = 0; i < args.Length; i++)
@@ -43,9 +42,9 @@ public static class Program
                 case "--p3": p3 = true; break;
                 case "--p4": p4 = true; break;
                 case "--p5": p5 = true; break;
+                case "--p6": p6 = true; break;
                 case "--resize": resizeTest = true; break;
                 case "--shot" when i + 1 < args.Length: shot = args[++i]; break;
-                case "--frames" when i + 1 < args.Length: frames = int.Parse(args[++i]); break;
                 case "--seconds" when i + 1 < args.Length: seconds = int.Parse(args[++i]); break;
                 case "--locate": return Locate();
                 case "--help" or "-h" or "/?": Console.WriteLine(usage); return 0;
@@ -53,7 +52,9 @@ public static class Program
             }
         }
 
-        // P0-P5 run the standalone Vulkan renderer and deliberately do not touch Enscape.
+        // Every path uses the standalone Vulkan renderer; no external engine is required.
+        if (selftest) return P0Spike.Run(shot, seconds, resizeTest: false);
+        if (p6) return P6Spike.Run(shot);
         if (p5) return P5Spike.Run(shot);
         if (p4) return P4Spike.Run(shot);
         if (p3) return P3Spike.Run(shot);
@@ -61,36 +62,9 @@ public static class Program
         if (p1) return P1Spike.Run(shot);
         if (p0) return P0Spike.Run(shot, seconds, resizeTest);
 
-        var useStandalone = string.Equals(
-            Environment.GetEnvironmentVariable("POWERPOTION_RENDERER"), "pp", StringComparison.OrdinalIgnoreCase);
-
         var dataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PowerPotion");
         HostLog.Initialize(Path.Combine(dataDir, "Logs"));
-
-        string? enscapeDir = null;
-        if (!useStandalone)
-        {
-            enscapeDir = EnscapeLocator.FindRendererHostDir();
-            if (enscapeDir == null)
-            {
-                Console.Error.WriteLine("PowerPotion: no compatible renderer installation found. " +
-                    "Install the renderer or set POWERPOTION_ENSCAPE_DIR to its RendererHost directory. " +
-                    "Use POWERPOTION_RENDERER=pp for the standalone renderer.");
-                return 3;
-            }
-            EngineBridge.InstallAssemblyResolver(enscapeDir);
-        }
-
-        if (selftest)
-        {
-            if (useStandalone)
-            {
-                Console.Error.WriteLine("--selftest currently targets the Enscape bridge; use --p0 for the standalone spike.");
-                return 4;
-            }
-            return SelfTest.Run(enscapeDir!, dataDir, frames, shot);
-        }
 
         var settings = HostSettings.Load();
         var app = new Application();
@@ -104,9 +78,7 @@ public static class Program
         TaskScheduler.UnobservedTaskException += (_, e) =>
             HostLog.Exception("Unobserved task", e.Exception);
 
-        IRendererBridge engine = useStandalone
-            ? new RendererBridge()
-            : new EngineBridge(enscapeDir!, dataDir);
+        IRendererBridge engine = new RendererBridge();
 
         HostConnection? connection = null;
         if (port > 0)
@@ -145,9 +117,8 @@ public static class Program
 
     private static int Locate()
     {
-        var dir = EnscapeLocator.FindRendererHostDir();
-        Console.WriteLine(dir is null ? "not found" : dir);
-        return dir is null ? 1 : 0;
+        Console.WriteLine("PowerPotion standalone Vulkan renderer (no external engine required)");
+        return 0;
     }
 
     public static string ThisVersion() =>

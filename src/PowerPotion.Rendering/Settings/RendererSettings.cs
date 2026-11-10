@@ -46,6 +46,16 @@ public sealed class RendererSettings
     public double CloudContrails;
     public double CloudOffsetX;
     public double CloudOffsetZ;
+    public double WindStrength = 0.5;
+    public double WindDirection;
+
+    // P6 quality.
+    public double SsaoStrength = 0.6;
+    public double SsaoRadius = 5.0;
+    public double SsgiStrength = 0.6;
+    public double SsgiRadius = 0.03;
+    public double SsgiFalloff = 4.0;
+    public double RenderScale = 1.0;
 
     public bool WhiteBackground;
 

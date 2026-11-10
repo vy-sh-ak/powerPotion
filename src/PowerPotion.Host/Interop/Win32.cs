@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace PowerPotion.Host.Enscape;
+namespace PowerPotion.Host.Interop;
 
 internal static class Win32
 {

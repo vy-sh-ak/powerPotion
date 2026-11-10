@@ -1,4 +1,4 @@
-; PowerPotion — installer/uninstaller for the personalized Enscape-style Revit renderer.
+; PowerPotion — installer/uninstaller for the standalone Vulkan Revit renderer.
 ; Builds a single PowerPotionSetup.exe that installs the Revit add-in + renderer host
 ; per-user (no admin required) and registers a clean uninstaller that removes all traces.
 ;
@@ -33,7 +33,7 @@ WizardImageFile=wizard.bmp
 WizardSmallImageFile=wizard-small.bmp
 
 [Messages]
-WelcomeLabel2=This will install [name/ver] — a personalized real-time rendering companion for Autodesk Revit that reuses the rendering engine of your installed Enscape product.%n%nPrerequisites:%n• Autodesk Revit 2026%n• Enscape 4.7+ (installed and licensed separately — PowerPotion does not modify it)%n%nThe installer places the add-in in your per-user Revit Addins folder. No administrator rights needed.
+WelcomeLabel2=This will install [name/ver] — a personalized real-time rendering companion for Autodesk Revit with its own standalone Vulkan renderer.%n%nPrerequisites:%n• Autodesk Revit 2026%n• Windows 10/11 x64 with a Vulkan 1.3-capable GPU%n%nNo separate rendering engine is required. The installer places the add-in in your per-user Revit Addins folder. No administrator rights needed.
 
 [Files]
 ; renderer host + settings
@@ -79,7 +79,7 @@ begin
       '    <AddInId>7F5A1C92-3B4D-4E8F-9A60-2C7D1B55E4A3</AddInId>' + #13#10 +
       '    <FullClassName>PowerPotion.Revit.PowerPotionApp</FullClassName>' + #13#10 +
       '    <VendorId>PWPT</VendorId>' + #13#10 +
-      '    <VendorDescription>PowerPotion (personalized Enscape-style renderer)</VendorDescription>' + #13#10 +
+      '    <VendorDescription>PowerPotion (standalone Vulkan renderer)</VendorDescription>' + #13#10 +
       '  </AddIn>' + #13#10 +
       '</RevitAddIns>' + #13#10;
     SaveStringToFile(AddinPath, AddinXml, False);
@@ -99,7 +99,7 @@ Type: files; Name: "{userappdata}\Autodesk\Revit\Addins\2026\PowerPotion.addin"
 Type: filesandordirs; Name: "{userdocs}\PowerPotion"
 
 [Run]
-Filename: "{app}\PowerPotion.Host.exe"; Parameters: "--locate"; Description: "Verify the rendering engine is found"; Flags: runhidden skipifsilent
+Filename: "{app}\PowerPotion.Host.exe"; Parameters: "--locate"; Description: "Verify the renderer host starts"; Flags: runhidden skipifsilent
 Filename: "https://github.com/"; Description: "Open the documentation"; Flags: postinstall shellexec unchecked
 
 [Icons]

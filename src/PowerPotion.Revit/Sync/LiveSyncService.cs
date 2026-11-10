@@ -382,12 +382,8 @@ public sealed class LiveSyncService : IDisposable
             UseShellExecute = false,
             WorkingDirectory = Path.GetDirectoryName(_hostExePath)!,
         };
-        // The plugin ships the standalone Vulkan renderer. An explicit environment value can
-        // still select the legacy Enscape bridge for A/B testing.
-        var renderer = Environment.GetEnvironmentVariable("POWERPOTION_RENDERER");
-        if (string.IsNullOrWhiteSpace(renderer)) renderer = "pp";
-        psi.Environment["POWERPOTION_RENDERER"] = renderer;
-        LogLine($"launching host with renderer='{renderer}'");
+        // The host always runs the standalone Vulkan renderer; no external engine is selected.
+        LogLine("launching standalone renderer host");
         _hostProcess = Process.Start(psi);
     }
 

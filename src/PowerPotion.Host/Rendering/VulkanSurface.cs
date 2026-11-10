@@ -98,6 +98,8 @@ public sealed class VulkanSurface : HwndHost, IRenderSurface
 
     public IntPtr ChildHwnd => _hwnd;
     public (int Width, int Height) SurfaceSize => (_width, _height);
+    public int RenderWidth { get { lock (_stateLock) return (int)(_renderer?.RenderWidth ?? 0); } }
+    public int RenderHeight { get { lock (_stateLock) return (int)(_renderer?.RenderHeight ?? 0); } }
     public bool IsReady { get { lock (_stateLock) return _renderer != null && _renderer.IsInitialized; } }
     public string DeviceName { get { lock (_stateLock) return _renderer?.DeviceName ?? ""; } }
     public Exception? Error { get { lock (_stateLock) return _error; } }

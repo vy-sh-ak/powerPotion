@@ -30,6 +30,19 @@ public struct PostParams
     public float SunY;
     public float SunStrength;
     public float Taa;
+
+    public float SaoStrength;
+    public float SaoRadius;
+    public float Near;
+    public float Far;
+
+    public float GiStrength;
+    public float GiRadius;
+    public float GiFalloff;
+    public float GiPad;
+
+    public float[]? Projection;
+    public float[]? InvProjection;
 }
 
 /// <summary>
@@ -56,6 +69,7 @@ internal sealed unsafe class PostProcessor : IDisposable
     private Pipeline _pipeline;
     private RenderPass _renderPass;
     private Sampler _sampler;
+    private Sampler _depthSampler;
     private bool _disposed;
 
     public PostProcessor(VulkanContext context, VulkanAllocator allocator, PpPipelineCache pipelines,
@@ -96,6 +110,13 @@ internal sealed unsafe class PostProcessor : IDisposable
                 DescriptorCount = 1,
                 StageFlags = ShaderStageFlags.FragmentBit,
             },
+            new DescriptorSetLayoutBinding
+            {
+                Binding = 3,
+                DescriptorType = DescriptorType.CombinedImageSampler,
+                DescriptorCount = 1,
+                StageFlags = ShaderStageFlags.FragmentBit,
+            },
         };
 
         fixed (DescriptorSetLayoutBinding* bindingPtr = bindings)
@@ -114,7 +135,7 @@ internal sealed unsafe class PostProcessor : IDisposable
         var poolSizes = new[]
         {
             new DescriptorPoolSize { Type = DescriptorType.UniformBuffer, DescriptorCount = Frames },
-            new DescriptorPoolSize { Type = DescriptorType.CombinedImageSampler, DescriptorCount = Frames * 2 },
+            new DescriptorPoolSize { Type = DescriptorType.CombinedImageSampler, DescriptorCount = Frames * 3 },
         };
         fixed (DescriptorPoolSize* poolPtr = poolSizes)
         {
@@ -151,7 +172,7 @@ internal sealed unsafe class PostProcessor : IDisposable
 
         for (int i = 0; i < Frames; i++)
         {
-            _ubos[i] = _allocator.CreateBuffer(64, BufferUsageFlags.UniformBufferBit,
+            _ubos[i] = _allocator.CreateBuffer(224, BufferUsageFlags.UniformBufferBit,
                 MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, $"post uniform {i}");
             _mapped[i] = _ubos[i]!.Mapped;
         }
@@ -171,6 +192,22 @@ internal sealed unsafe class PostProcessor : IDisposable
         var samplerResult = _context.Vk.CreateSampler(_context.Device, &samplerInfo, null, out _sampler);
         if (samplerResult != Result.Success)
             throw new InvalidOperationException($"post vkCreateSampler failed: {samplerResult}");
+
+        var depthSamplerInfo = new SamplerCreateInfo
+        {
+            SType = StructureType.SamplerCreateInfo,
+            MagFilter = Filter.Nearest,
+            MinFilter = Filter.Nearest,
+            MipmapMode = SamplerMipmapMode.Nearest,
+            AddressModeU = SamplerAddressMode.ClampToEdge,
+            AddressModeV = SamplerAddressMode.ClampToEdge,
+            AddressModeW = SamplerAddressMode.ClampToEdge,
+            MinLod = 0f,
+            MaxLod = 0f,
+        };
+        var depthSamplerResult = _context.Vk.CreateSampler(_context.Device, &depthSamplerInfo, null, out _depthSampler);
+        if (depthSamplerResult != Result.Success)
+            throw new InvalidOperationException($"post depth vkCreateSampler failed: {depthSamplerResult}");
 
         _layout = _pipelines.CreateLayout(new[] { _setLayout }, Array.Empty<PushConstantRange>());
 
@@ -340,9 +377,10 @@ internal sealed unsafe class PostProcessor : IDisposable
         }
     }
 
-    public void Update(int frame, ImageView sourceView, ImageView historyView, in PostParams parameters)
+    public void Update(int frame, ImageView sourceView, ImageView historyView, ImageView depthView,
+        in PostParams parameters)
     {
-        var data = new float[16];
+        var data = new float[56];
         data[0] = parameters.Exposure;
         data[1] = parameters.Bloom;
         data[2] = parameters.Saturation;
@@ -359,15 +397,27 @@ internal sealed unsafe class PostProcessor : IDisposable
         data[13] = parameters.SunY;
         data[14] = parameters.SunStrength;
         data[15] = parameters.Taa;
+        data[16] = parameters.SaoStrength;
+        data[17] = parameters.SaoRadius;
+        data[18] = parameters.Near;
+        data[19] = parameters.Far;
+        data[20] = parameters.GiStrength;
+        data[21] = parameters.GiRadius;
+        data[22] = parameters.GiFalloff;
+        data[23] = parameters.GiPad;
+        if (parameters.Projection is { Length: 16 })
+            Array.Copy(parameters.Projection, 0, data, 24, 16);
+        if (parameters.InvProjection is { Length: 16 })
+            Array.Copy(parameters.InvProjection, 0, data, 40, 16);
 
         fixed (float* p = data)
-            System.Buffer.MemoryCopy(p, (void*)_mapped[frame], 64, 64);
+            System.Buffer.MemoryCopy(p, (void*)_mapped[frame], 224, 224);
 
         var uboInfo = new DescriptorBufferInfo
         {
             Buffer = _ubos[frame]!.Buffer,
             Offset = 0,
-            Range = 64,
+            Range = 224,
         };
         var imageInfo = new DescriptorImageInfo
         {
@@ -379,6 +429,12 @@ internal sealed unsafe class PostProcessor : IDisposable
         {
             ImageView = historyView,
             Sampler = _sampler,
+            ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+        };
+        var depthInfo = new DescriptorImageInfo
+        {
+            ImageView = depthView,
+            Sampler = _depthSampler,
             ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
         };
         var writes = new[]
@@ -409,6 +465,15 @@ internal sealed unsafe class PostProcessor : IDisposable
                 DescriptorCount = 1,
                 DescriptorType = DescriptorType.CombinedImageSampler,
                 PImageInfo = &historyInfo,
+            },
+            new WriteDescriptorSet
+            {
+                SType = StructureType.WriteDescriptorSet,
+                DstSet = _sets[frame],
+                DstBinding = 3,
+                DescriptorCount = 1,
+                DescriptorType = DescriptorType.CombinedImageSampler,
+                PImageInfo = &depthInfo,
             },
         };
         fixed (WriteDescriptorSet* writePtr = writes)
@@ -479,6 +544,7 @@ internal sealed unsafe class PostProcessor : IDisposable
         if (_pipeline.Handle != 0) vk.DestroyPipeline(_context.Device, _pipeline, null);
         if (_renderPass.Handle != 0) vk.DestroyRenderPass(_context.Device, _renderPass, null);
         if (_sampler.Handle != 0) vk.DestroySampler(_context.Device, _sampler, null);
+        if (_depthSampler.Handle != 0) vk.DestroySampler(_context.Device, _depthSampler, null);
         for (int i = 0; i < Frames; i++) _ubos[i]?.Destroy(immediate: true);
         if (_pool.Handle != 0) vk.DestroyDescriptorPool(_context.Device, _pool, null);
         if (_setLayout.Handle != 0) vk.DestroyDescriptorSetLayout(_context.Device, _setLayout, null);

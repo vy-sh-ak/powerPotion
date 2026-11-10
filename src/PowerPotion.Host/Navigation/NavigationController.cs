@@ -1,9 +1,10 @@
 using System.Runtime.InteropServices;
 using System.Windows.Threading;
+using PowerPotion.Host.Interop;
 using PowerPotion.Protocol;
 using PowerPotion.Rendering;
 
-namespace PowerPotion.Host.Enscape;
+namespace PowerPotion.Host.Navigation;
 
 /// <summary>
 /// Enscape-style free navigation for the embedded renderer.

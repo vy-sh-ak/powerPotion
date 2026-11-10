@@ -56,6 +56,8 @@ public sealed unsafe class VulkanRenderer : IDisposable
     private bool _vsync = true;
     private bool _hdr;
     private bool _whiteMode;
+    private float _renderScale = 1f;
+    private Extent2D _renderExtent;
 
     private RenderPass _renderPass;
     private RenderPass _transparentRenderPass;
@@ -92,6 +94,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
     private long _latestRequestedRevision = -1;
     private readonly ConcurrentQueue<SceneUploadData> _pendingScenes = new();
     private int _sceneDrawCalls;
+    private bool _cullWarned;
 
     private BufferAllocation? _vertexBuffer;
     private BufferAllocation? _indexBuffer;
@@ -107,6 +110,8 @@ public sealed unsafe class VulkanRenderer : IDisposable
     private Format _sceneColorFormat;
     private ImageAllocation? _sceneColorImage;
     private ImageView _sceneColorView;
+    private ImageAllocation? _sceneDepthColorImage;
+    private ImageView _sceneDepthColorView;
     private ImageAllocation? _taaHistoryImage;
     private ImageView _taaHistoryView;
     private ImageLayout _taaHistoryLayout = ImageLayout.Undefined;
@@ -153,6 +158,8 @@ public sealed unsafe class VulkanRenderer : IDisposable
     public bool IsInitialized => _context?.Device.Handle != 0;
     public Format SwapchainFormat => _swapchainFormat;
     public Extent2D Extent => _swapchainExtent;
+    public uint RenderWidth => _renderExtent.Width;
+    public uint RenderHeight => _renderExtent.Height;
     public double LastFrameMilliseconds { get; private set; }
     public double FramesPerSecond { get; private set; }
 
@@ -188,6 +195,10 @@ public sealed unsafe class VulkanRenderer : IDisposable
         _swapchainState.Log += Write;
         _swapchainState.Create(_pendingWidth, _pendingHeight);
         _sceneColorFormat = ChooseSceneColorFormat();
+        _renderScale = Math.Clamp((float)_settings.RenderScale, 0.5f, 1f);
+        _renderExtent = ComputeRenderExtent();
+        Write($"render scale: {_renderScale:0.##} -> {_renderExtent.Width}x{_renderExtent.Height} " +
+              $"(swapchain {_swapchainExtent.Width}x{_swapchainExtent.Height})");
 
         CreateRenderPass();
         _descriptors = new DescriptorManager(_context, MaxFramesInFlight);
@@ -224,7 +235,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         _descriptors.CreateSceneSets(_sceneUniformBuffers, _materialBuffer.Allocation,
             _lightBuffer.Allocation, _shadowMap.ArrayView, _shadowMap.Sampler);
         CreateScenePipelines();
-        _camera.SetAspect(_swapchainExtent.Width, _swapchainExtent.Height);
+        _camera.SetAspect(_renderExtent.Width, _renderExtent.Height);
         UpdateSceneUniforms(0);
 
         CreateSyncObjects();
@@ -253,6 +264,18 @@ public sealed unsafe class VulkanRenderer : IDisposable
             FinalLayout = ImageLayout.ColorAttachmentOptimal,
         };
 
+        var linearDepth = new AttachmentDescription
+        {
+            Format = Format.R32Sfloat,
+            Samples = SampleCountFlags.Count1Bit,
+            LoadOp = clear ? AttachmentLoadOp.DontCare : AttachmentLoadOp.Load,
+            StoreOp = AttachmentStoreOp.Store,
+            StencilLoadOp = AttachmentLoadOp.DontCare,
+            StencilStoreOp = AttachmentStoreOp.DontCare,
+            InitialLayout = ImageLayout.ColorAttachmentOptimal,
+            FinalLayout = ImageLayout.ColorAttachmentOptimal,
+        };
+
         var depth = new AttachmentDescription
         {
             Format = _depthFormat,
@@ -265,17 +288,13 @@ public sealed unsafe class VulkanRenderer : IDisposable
             FinalLayout = ImageLayout.DepthStencilAttachmentOptimal,
         };
 
-        var attachments = new[] { color, depth };
-        var colorRef = new AttachmentReference { Attachment = 0, Layout = ImageLayout.ColorAttachmentOptimal };
-        var depthRef = new AttachmentReference { Attachment = 1, Layout = ImageLayout.DepthStencilAttachmentOptimal };
-
-        var subpass = new SubpassDescription
+        var attachments = new[] { color, linearDepth, depth };
+        var colorRefs = new[]
         {
-            PipelineBindPoint = PipelineBindPoint.Graphics,
-            ColorAttachmentCount = 1,
-            PColorAttachments = &colorRef,
-            PDepthStencilAttachment = &depthRef,
+            new AttachmentReference { Attachment = 0, Layout = ImageLayout.ColorAttachmentOptimal },
+            new AttachmentReference { Attachment = 1, Layout = ImageLayout.ColorAttachmentOptimal },
         };
+        var depthRef = new AttachmentReference { Attachment = 2, Layout = ImageLayout.DepthStencilAttachmentOptimal };
 
         var dependency = new SubpassDependency
         {
@@ -289,8 +308,16 @@ public sealed unsafe class VulkanRenderer : IDisposable
             DstAccessMask = AccessFlags.ColorAttachmentWriteBit | AccessFlags.DepthStencilAttachmentWriteBit,
         };
 
+        fixed (AttachmentReference* colorPtr = colorRefs)
         fixed (AttachmentDescription* attachmentPtr = attachments)
         {
+            var subpass = new SubpassDescription
+            {
+                PipelineBindPoint = PipelineBindPoint.Graphics,
+                ColorAttachmentCount = 2,
+                PColorAttachments = colorPtr,
+                PDepthStencilAttachment = &depthRef,
+            };
             var info = new RenderPassCreateInfo
             {
                 SType = StructureType.RenderPassCreateInfo,
@@ -308,16 +335,19 @@ public sealed unsafe class VulkanRenderer : IDisposable
             return renderPass;
         }
     }
-
     private Format ChooseDepthFormat()
     {
         foreach (var format in new[] { Format.D32Sfloat, Format.D24UnormS8Uint, Format.D16Unorm })
         {
             var props = _vk.GetPhysicalDeviceFormatProperties(_physicalDevice, format);
-            if ((props.OptimalTilingFeatures & FormatFeatureFlags.DepthStencilAttachmentBit) != 0)
+            if ((props.OptimalTilingFeatures & FormatFeatureFlags.DepthStencilAttachmentBit) != 0 &&
+                (props.OptimalTilingFeatures & FormatFeatureFlags.SampledImageBit) != 0)
+            {
+                Write($"depth format: {format} (sampled)");
                 return format;
+            }
         }
-        throw new InvalidOperationException("No supported depth format found.");
+        throw new InvalidOperationException("No sampled depth format found.");
     }
 
     /// <summary>P5: HDR scene-colour target for ACES tonemapping in the post pass.</summary>
@@ -336,6 +366,17 @@ public sealed unsafe class VulkanRenderer : IDisposable
                 return format;
         }
         return _swapchainFormat;
+    }
+
+    /// <summary>P6: render-scale target (scene passes render here; post upscales to the swapchain).</summary>
+    private Extent2D ComputeRenderExtent()
+    {
+        float scale = Math.Clamp(_renderScale, 0.5f, 1f);
+        return new Extent2D
+        {
+            Width = Math.Max(1u, (uint)(_swapchainExtent.Width * scale)),
+            Height = Math.Max(1u, (uint)(_swapchainExtent.Height * scale)),
+        };
     }
 
     private void CreatePipeline()
@@ -393,10 +434,26 @@ public sealed unsafe class VulkanRenderer : IDisposable
             };
 
             var dynamicStates = new[] { DynamicState.Viewport, DynamicState.Scissor };
+            var colorBlendAttachments = new[]
+            {
+                new PipelineColorBlendAttachmentState
+                {
+                    BlendEnable = false,
+                    ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit |
+                                     ColorComponentFlags.BBit | ColorComponentFlags.ABit,
+                },
+                new PipelineColorBlendAttachmentState
+                {
+                    BlendEnable = false,
+                    ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit |
+                                     ColorComponentFlags.BBit | ColorComponentFlags.ABit,
+                },
+            };
 
             fixed (VertexInputAttributeDescription* attributePtr = attributes)
             fixed (DynamicState* dynamicStatePtr = dynamicStates)
             fixed (PipelineShaderStageCreateInfo* stagePtr = stages)
+            fixed (PipelineColorBlendAttachmentState* blendPtr = colorBlendAttachments)
             {
                 var vertexInput = new PipelineVertexInputStateCreateInfo
                 {
@@ -450,19 +507,12 @@ public sealed unsafe class VulkanRenderer : IDisposable
                     StencilTestEnable = false,
                 };
 
-                var colorBlendAttachment = new PipelineColorBlendAttachmentState
-                {
-                    BlendEnable = false,
-                    ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit |
-                                     ColorComponentFlags.BBit | ColorComponentFlags.ABit,
-                };
-
                 var colorBlend = new PipelineColorBlendStateCreateInfo
                 {
                     SType = StructureType.PipelineColorBlendStateCreateInfo,
                     LogicOpEnable = false,
-                    AttachmentCount = 1,
-                    PAttachments = &colorBlendAttachment,
+                    AttachmentCount = 2,
+                    PAttachments = blendPtr,
                 };
 
                 var dynamicState = new PipelineDynamicStateCreateInfo
@@ -535,10 +585,10 @@ public sealed unsafe class VulkanRenderer : IDisposable
     private void CreateDepthResources()
     {
         _depthImage = _allocator.CreateImage(
-            _swapchainExtent.Width,
-            _swapchainExtent.Height,
+            _renderExtent.Width,
+            _renderExtent.Height,
             _depthFormat,
-            ImageUsageFlags.DepthStencilAttachmentBit,
+            ImageUsageFlags.DepthStencilAttachmentBit | ImageUsageFlags.SampledBit,
             "depth buffer");
 
         _depthView = CreateImageView(_depthImage.Image, _depthFormat, ImageAspectFlags.DepthBit);
@@ -562,12 +612,21 @@ public sealed unsafe class VulkanRenderer : IDisposable
     {
         DestroySceneColorResources();
         _sceneColorImage = _allocator.CreateImage(
-            _swapchainExtent.Width,
-            _swapchainExtent.Height,
+            _renderExtent.Width,
+            _renderExtent.Height,
             _sceneColorFormat,
             ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.SampledBit | ImageUsageFlags.TransferSrcBit,
             "scene colour");
         _sceneColorView = CreateImageView(_sceneColorImage.Image, _sceneColorFormat, ImageAspectFlags.ColorBit);
+
+        _sceneDepthColorImage = _allocator.CreateImage(
+            _renderExtent.Width,
+            _renderExtent.Height,
+            Format.R32Sfloat,
+            ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.SampledBit,
+            "scene linear depth");
+        _sceneDepthColorView = CreateImageView(_sceneDepthColorImage.Image, Format.R32Sfloat,
+            ImageAspectFlags.ColorBit);
     }
 
     private void DestroySceneColorResources()
@@ -576,6 +635,10 @@ public sealed unsafe class VulkanRenderer : IDisposable
         _sceneColorView = default;
         _sceneColorImage?.Destroy(immediate: true);
         _sceneColorImage = null;
+        if (_sceneDepthColorView.Handle != 0) _vk.DestroyImageView(_device, _sceneDepthColorView, null);
+        _sceneDepthColorView = default;
+        _sceneDepthColorImage?.Destroy(immediate: true);
+        _sceneDepthColorImage = null;
     }
 
     private void CreateTaaResources()
@@ -612,7 +675,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
 
     private Framebuffer CreateFramebuffer(RenderPass renderPass, ImageView colorView)
     {
-        var attachments = new[] { colorView, _depthView };
+        var attachments = new[] { colorView, _sceneDepthColorView, _depthView };
         fixed (ImageView* p = attachments)
         {
             var info = new FramebufferCreateInfo
@@ -621,8 +684,8 @@ public sealed unsafe class VulkanRenderer : IDisposable
                 RenderPass = renderPass,
                 AttachmentCount = (uint)attachments.Length,
                 PAttachments = p,
-                Width = _swapchainExtent.Width,
-                Height = _swapchainExtent.Height,
+                Width = _renderExtent.Width,
+                Height = _renderExtent.Height,
                 Layers = 1,
             };
 
@@ -643,8 +706,8 @@ public sealed unsafe class VulkanRenderer : IDisposable
         }
 
         _refractionImage = _allocator.CreateImage(
-            _swapchainExtent.Width,
-            _swapchainExtent.Height,
+            _renderExtent.Width,
+            _renderExtent.Height,
             _sceneColorFormat,
             ImageUsageFlags.SampledBit | ImageUsageFlags.TransferDstBit,
             "scene colour copy");
@@ -668,6 +731,15 @@ public sealed unsafe class VulkanRenderer : IDisposable
 
         _refractionLayout = ImageLayout.Undefined;
         _descriptors.CreateScreenSet(_refractionView, _refractionSampler);
+
+        var commandBuffer = BeginSingleTimeCommands();
+        TransitionImage(commandBuffer, _refractionImage.Image,
+            ImageLayout.Undefined, ImageLayout.ShaderReadOnlyOptimal,
+            PipelineStageFlags.TopOfPipeBit, PipelineStageFlags.FragmentShaderBit,
+            0, AccessFlags.ShaderReadBit);
+        EndSingleTimeCommands(commandBuffer);
+        _refractionLayout = ImageLayout.ShaderReadOnlyOptimal;
+
         _screenRefractionEnabled = true;
         Write($"screen refraction: enabled ({_swapchainExtent.Width}x{_swapchainExtent.Height} scene-colour copy)");
     }
@@ -718,7 +790,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
     {
         for (int i = 0; i < MaxFramesInFlight; i++)
         {
-            _sceneUniformBuffers[i] = _allocator.CreateBuffer(592, BufferUsageFlags.UniformBufferBit,
+            _sceneUniformBuffers[i] = _allocator.CreateBuffer(608, BufferUsageFlags.UniformBufferBit,
                 MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, $"scene uniform {i}");
             _sceneUniformMapped[i] = _sceneUniformBuffers[i]!.Mapped;
         }
@@ -884,39 +956,50 @@ public sealed unsafe class VulkanRenderer : IDisposable
             ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit |
                              ColorComponentFlags.BBit | ColorComponentFlags.ABit,
         };
+        var linearDepthBlendAttachment = new PipelineColorBlendAttachmentState
+        {
+            BlendEnable = false,
+            ColorWriteMask = ColorComponentFlags.RBit | ColorComponentFlags.GBit |
+                             ColorComponentFlags.BBit | ColorComponentFlags.ABit,
+        };
+        var blendAttachments = new[] { blendAttachment, linearDepthBlendAttachment };
 
         var colorBlend = new PipelineColorBlendStateCreateInfo
         {
             SType = StructureType.PipelineColorBlendStateCreateInfo,
             LogicOpEnable = false,
-            AttachmentCount = 1,
-            PAttachments = &blendAttachment,
+            AttachmentCount = 2,
+            PAttachments = null,
         };
 
-        var info = new GraphicsPipelineCreateInfo
+        fixed (PipelineColorBlendAttachmentState* blendPtr = blendAttachments)
         {
-            SType = StructureType.GraphicsPipelineCreateInfo,
-            StageCount = stageCount,
-            PStages = stages,
-            PVertexInputState = vertexInput,
-            PInputAssemblyState = inputAssembly,
-            PViewportState = viewportState,
-            PRasterizationState = &raster,
-            PMultisampleState = multisample,
-            PDepthStencilState = &depth,
-            PColorBlendState = &colorBlend,
-            PDynamicState = dynamicState,
-            Layout = _scenePipelineLayout,
-            RenderPass = renderPass,
-            Subpass = 0,
-        };
+            colorBlend.PAttachments = blendPtr;
+            var info = new GraphicsPipelineCreateInfo
+            {
+                SType = StructureType.GraphicsPipelineCreateInfo,
+                StageCount = stageCount,
+                PStages = stages,
+                PVertexInputState = vertexInput,
+                PInputAssemblyState = inputAssembly,
+                PViewportState = viewportState,
+                PRasterizationState = &raster,
+                PMultisampleState = multisample,
+                PDepthStencilState = &depth,
+                PColorBlendState = &colorBlend,
+                PDynamicState = dynamicState,
+                Layout = _scenePipelineLayout,
+                RenderPass = renderPass,
+                Subpass = 0,
+            };
 
-        return _pipelines.CreateGraphicsPipeline(ref info);
+            return _pipelines.CreateGraphicsPipeline(ref info);
+        }
     }
 
     private void UpdateSceneUniforms(int frame)
     {
-        var data = new float[148];
+        var data = new float[152];
         Array.Copy(_camera.ViewProjection, data, 16);
         data[16] = _camera.Position.X;
         data[17] = _camera.Position.Y;
@@ -974,9 +1057,13 @@ public sealed unsafe class VulkanRenderer : IDisposable
         data[145] = (float)_clock.Elapsed.TotalSeconds; // water animation time
         data[146] = 0f;
         data[147] = 0f;
+        data[148] = (float)_settings.FogAmount;
+        data[149] = (float)_settings.FogHeight;
+        data[150] = 1f;
+        data[151] = (float)_clock.Elapsed.TotalSeconds;
 
         fixed (float* p = data)
-            System.Buffer.MemoryCopy(p, (void*)_sceneUniformMapped[frame], 592, 592);
+            System.Buffer.MemoryCopy(p, (void*)_sceneUniformMapped[frame], 608, 608);
     }
 
     /// <summary>P4: sets up to 8 world-space clip planes (xyzd; dot(n,p)+d &gt;= 0 is kept).</summary>
@@ -1009,7 +1096,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         _latestRequestedRevision = world.Revision;
         if (applyCamera) _camera.Update(world.Camera);
         ApplySun(world.Sun);
-        _camera.SetAspect(_swapchainExtent.Width, _swapchainExtent.Height);
+        _camera.SetAspect(_renderExtent.Width, _renderExtent.Height);
 
         Write($"scene: building rev {world.Revision} asynchronously...");
         _ = Task.Run(() =>
@@ -1058,7 +1145,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
     public void ApplyCamera(CameraUpdate camera)
     {
         _camera.Update(camera);
-        _camera.SetAspect(_swapchainExtent.Width, _swapchainExtent.Height);
+        _camera.SetAspect(_renderExtent.Width, _renderExtent.Height);
         if (!_cameraModeLogged ||
             camera.Ortho != _lastCameraOrtho ||
             camera.TwoPointPerspective != _lastCameraTwoPoint)
@@ -1107,7 +1194,8 @@ public sealed unsafe class VulkanRenderer : IDisposable
             bool doubleSided = material.DoubleSided || draw.BackMaterial != draw.FrontMaterial;
             bool transparent = material.Opacity < 0.999f || material.IsSolidGlass || material.MaterialType == 2;
             _scene.Draws[i] = new SceneDraw(draw.ModelIndex, draw.Matrix, draw.StartIndex, draw.IndexCount,
-                draw.FrontMaterial, draw.BackMaterial, doubleSided, transparent, draw.Distance, draw.Center);
+                draw.FrontMaterial, draw.BackMaterial, doubleSided, transparent, draw.Distance,
+                draw.Center, draw.Radius);
         }
         MaterialUpdateMilliseconds = timer.Elapsed.TotalMilliseconds;
         Write($"scene: material {material.Id} updated at index {index} in {MaterialUpdateMilliseconds:0.##} ms");
@@ -1196,8 +1284,8 @@ public sealed unsafe class VulkanRenderer : IDisposable
             _shadowMap.UpdateCascades(_camera, _sunInfo.Direction, 120f);
         if (_taaHistoryValid)
         {
-            float jx = (Halton(FrameCount + 1, 2) - 0.5f) * 2f / _swapchainExtent.Width;
-            float jy = (Halton(FrameCount + 1, 3) - 0.5f) * 2f / _swapchainExtent.Height;
+            float jx = (Halton(FrameCount + 1, 2) - 0.5f) * 2f / _renderExtent.Width;
+            float jy = (Halton(FrameCount + 1, 3) - 0.5f) * 2f / _renderExtent.Height;
             _camera.SetJitter(jx, jy);
         }
         else
@@ -1277,7 +1365,8 @@ public sealed unsafe class VulkanRenderer : IDisposable
         var begin = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo };
         _vk.BeginCommandBuffer(commandBuffer, &begin);
 
-        _sky.Update(_currentFrame, _camera, _sunInfo, _settings, _whiteMode);
+        _sky.Update(_currentFrame, _camera, _sunInfo, _settings, _whiteMode,
+            (float)_clock.Elapsed.TotalSeconds);
         _frameGraph.Reset();
         bool shadows = _scene is { HasGeometry: true } &&
                        _settings.RtSunShadows &&
@@ -1299,6 +1388,11 @@ public sealed unsafe class VulkanRenderer : IDisposable
                 PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
                 PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
                 0, AccessFlags.ColorAttachmentWriteBit | AccessFlags.DepthStencilAttachmentWriteBit,
+                ImageAspectFlags.ColorBit),
+            new ImageTransition(_sceneDepthColorImage!.Image,
+                ImageLayout.Undefined, ImageLayout.ColorAttachmentOptimal,
+                PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.ColorAttachmentOutputBit,
+                0, AccessFlags.ColorAttachmentWriteBit,
                 ImageAspectFlags.ColorBit),
             new ImageTransition(_depthImage!.Image,
                 ImageLayout.Undefined, ImageLayout.DepthStencilAttachmentOptimal,
@@ -1323,6 +1417,11 @@ public sealed unsafe class VulkanRenderer : IDisposable
                 PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.FragmentShaderBit,
                 AccessFlags.ColorAttachmentWriteBit, AccessFlags.ShaderReadBit,
                 ImageAspectFlags.ColorBit),
+            new ImageTransition(_sceneDepthColorImage!.Image,
+                ImageLayout.ColorAttachmentOptimal, ImageLayout.ShaderReadOnlyOptimal,
+                PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.FragmentShaderBit,
+                AccessFlags.ColorAttachmentWriteBit, AccessFlags.ShaderReadBit,
+                ImageAspectFlags.ColorBit),
             new ImageTransition(_swapchainImages[imageIndex],
                 ImageLayout.Undefined, ImageLayout.ColorAttachmentOptimal,
                 PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.ColorAttachmentOutputBit,
@@ -1343,10 +1442,10 @@ public sealed unsafe class VulkanRenderer : IDisposable
     }
 
     private void RecordOpaquePass(CommandBuffer commandBuffer, uint imageIndex) =>
-        RecordRenderPass(commandBuffer, _framebuffers[imageIndex], _swapchainExtent, transparent: false);
+        RecordRenderPass(commandBuffer, _framebuffers[imageIndex], _renderExtent, transparent: false);
 
     private void RecordTransparentPass(CommandBuffer commandBuffer, uint imageIndex) =>
-        RecordRenderPass(commandBuffer, _transparentFramebuffers[imageIndex], _swapchainExtent, transparent: true);
+        RecordRenderPass(commandBuffer, _transparentFramebuffers[imageIndex], _renderExtent, transparent: true);
 
     private void RecordPostPass(CommandBuffer commandBuffer, uint imageIndex)
     {
@@ -1357,7 +1456,8 @@ public sealed unsafe class VulkanRenderer : IDisposable
     }
 
     private void UpdatePostParams(int frame) =>
-        _post.Update(frame, _sceneColorView, _taaHistoryView, BuildPostParams(immediate: false));
+        _post.Update(frame, _sceneColorView, _taaHistoryView, _sceneDepthColorView,
+            BuildPostParams(immediate: false));
 
     private PostParams BuildPostParams(bool immediate = false)
     {
@@ -1416,6 +1516,16 @@ public sealed unsafe class VulkanRenderer : IDisposable
             SunY = sunY,
             SunStrength = sunStrength,
             Taa = (!immediate && _taaHistoryValid && !_settings.ShowSafeFrame) ? 0.85f : 0f,
+            SaoStrength = (float)_settings.SsaoStrength,
+            SaoRadius = (float)_settings.SsaoRadius,
+            Near = _camera.Near,
+            Far = _camera.Far,
+            GiStrength = (float)_settings.SsgiStrength,
+            GiRadius = (float)_settings.SsgiRadius,
+            GiFalloff = (float)_settings.SsgiFalloff,
+            GiPad = _settings.RenderScale < 0.999 ? 1f : 0f,
+            Projection = _camera.Projection,
+            InvProjection = Mat4.Invert(_camera.Projection),
         };
         return parameters;
     }
@@ -1427,6 +1537,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         var clearValues = new[]
         {
             new ClearValue { Color = new ClearColorValue { Float32_0 = 0.055f, Float32_1 = 0.043f, Float32_2 = 0.105f, Float32_3 = 1.0f } },
+            new ClearValue { Color = new ClearColorValue { Float32_0 = 0f, Float32_1 = 0f, Float32_2 = 0f, Float32_3 = 0f } },
             new ClearValue { DepthStencil = new ClearDepthStencilValue { Depth = 1.0f, Stencil = 0 } },
         };
 
@@ -1498,7 +1609,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
             DstOffset = new Offset3D { X = 0, Y = 0, Z = 0 },
             Extent = new Extent3D
             {
-                Width = _swapchainExtent.Width, Height = _swapchainExtent.Height, Depth = 1,
+                Width = _renderExtent.Width, Height = _renderExtent.Height, Depth = 1,
             },
         };
         _vk.CmdCopyImage(commandBuffer, sourceColor, ImageLayout.TransferSrcOptimal,
@@ -1658,20 +1769,33 @@ public sealed unsafe class VulkanRenderer : IDisposable
                 2, 1, &screenSet, 0, null);
 
         var draws = _scene!.Draws;
+        var planes = BuildFrustumPlanes(_camera.ViewProjection);
         if (!transparentPass)
         {
+            int visible = 0;
             for (int i = 0; i < draws.Count; i++)
             {
-                if (!draws[i].Transparent)
+                if (!draws[i].Transparent &&
+                    SphereInFrustum(draws[i].Center, draws[i].Radius, planes))
+                {
+                    visible++;
                     DrawSceneItem(commandBuffer, draws[i], screenRefraction: false);
+                }
+            }
+            if (visible == 0 && draws.Count > 0 && !_cullWarned)
+            {
+                _cullWarned = true;
+                Write($"cull: all {draws.Count} draws culled (cam {_camera.Position.X:0.#}," +
+                      $"{_camera.Position.Y:0.#},{_camera.Position.Z:0.#}, extent {_renderExtent.Width}x{_renderExtent.Height})");
             }
             return;
         }
 
         // P4: transparent draws are sorted per frame by distance from the current camera.
+        // P6: both opaque and transparent draws are frustum-culled.
         var cameraPos = _camera.Position;
         var transparent = draws
-            .Where(d => d.Transparent)
+            .Where(d => d.Transparent && SphereInFrustum(d.Center, d.Radius, planes))
             .OrderByDescending(d => DistanceSquared(d.Center, cameraPos));
         foreach (var draw in transparent)
             DrawSceneItem(commandBuffer, draw, screenRefraction: _screenRefractionEnabled);
@@ -1681,6 +1805,41 @@ public sealed unsafe class VulkanRenderer : IDisposable
     {
         float dx = a.X - b.X, dy = a.Y - b.Y, dz = a.Z - b.Z;
         return dx * dx + dy * dy + dz * dz;
+    }
+
+    /// <summary>P6: six normalized frustum planes from a column-major view-projection matrix.</summary>
+    private static float[] BuildFrustumPlanes(float[] m)
+    {
+        var planes = new float[24];
+        void Set(int index, float a, float b, float c, float d)
+        {
+            float length = MathF.Sqrt(a * a + b * b + c * c);
+            if (length < 1e-6f) length = 1f;
+            planes[index * 4] = a / length;
+            planes[index * 4 + 1] = b / length;
+            planes[index * 4 + 2] = c / length;
+            planes[index * 4 + 3] = d / length;
+        }
+        // Rows: r0=(m0,m4,m8,m12), r1=(m1,m5,m9,m13), r2=(m2,m6,m10,m14), r3=(m3,m7,m11,m15).
+        Set(0, m[3] + m[0], m[7] + m[4], m[11] + m[8], m[15] + m[12]);   // left
+        Set(1, m[3] - m[0], m[7] - m[4], m[11] - m[8], m[15] - m[12]);   // right
+        Set(2, m[3] + m[1], m[7] + m[5], m[11] + m[9], m[15] + m[13]);   // bottom
+        Set(3, m[3] - m[1], m[7] - m[5], m[11] - m[9], m[15] - m[13]);   // top
+        Set(4, m[2], m[6], m[10], m[14]);                                 // near
+        Set(5, m[3] - m[2], m[7] - m[6], m[11] - m[10], m[15] - m[14]);   // far
+        return planes;
+    }
+
+    private static bool SphereInFrustum(Vec3 center, float radius, float[] planes)
+    {
+        for (int i = 0; i < 6; i++)
+        {
+            int o = i * 4;
+            float distance = planes[o] * center.X + planes[o + 1] * center.Y +
+                             planes[o + 2] * center.Z + planes[o + 3];
+            if (distance < -radius) return false;
+        }
+        return true;
     }
 
     private static float Halton(ulong index, int baseValue)
@@ -1764,14 +1923,16 @@ public sealed unsafe class VulkanRenderer : IDisposable
         var colorTransient = _frameGraph.GetTransientImage("capture-color", width, height, _sceneColorFormat,
             ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.TransferSrcBit | ImageUsageFlags.SampledBit);
         var depthTransient = _frameGraph.GetTransientImage("capture-depth", width, height, _depthFormat,
-            ImageUsageFlags.DepthStencilAttachmentBit);
+            ImageUsageFlags.DepthStencilAttachmentBit | ImageUsageFlags.SampledBit | ImageUsageFlags.TransferSrcBit);
+        var depthColorTransient = _frameGraph.GetTransientImage("capture-linear-depth", width, height, Format.R32Sfloat,
+            ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.SampledBit);
         var postTransient = _frameGraph.GetTransientImage("capture-post", width, height, _swapchainFormat,
             ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.TransferSrcBit);
 
         Framebuffer opaqueFramebuffer = CreateCaptureFramebuffer(
-            _renderPass, colorTransient.View, depthTransient.View, width, height);
+            _renderPass, colorTransient.View, depthColorTransient.View, depthTransient.View, width, height);
         Framebuffer transparentFramebuffer = CreateCaptureFramebuffer(
-            _transparentRenderPass, colorTransient.View, depthTransient.View, width, height);
+            _transparentRenderPass, colorTransient.View, depthColorTransient.View, depthTransient.View, width, height);
         Framebuffer postFramebuffer = default;
         bool hdrExr = string.Equals(Path.GetExtension(path), ".exr", StringComparison.OrdinalIgnoreCase)
                       && _sceneColorFormat == Format.R16G16B16A16Sfloat;
@@ -1789,7 +1950,8 @@ public sealed unsafe class VulkanRenderer : IDisposable
         if (_scene is { HasGeometry: true } && _settings.RtSunShadows && _sunInfo.Intensity > 0.01f)
             _shadowMap.UpdateCascades(_camera, _sunInfo.Direction, 120f);
         UpdateSceneUniforms(_currentFrame);
-        _sky.Update(_currentFrame, _camera, _sunInfo, _settings, _whiteMode);
+        _sky.Update(_currentFrame, _camera, _sunInfo, _settings, _whiteMode,
+            (float)_clock.Elapsed.TotalSeconds);
         var commandBuffer = BeginSingleTimeCommands();
         var extent = new Extent2D { Width = width, Height = height };
 
@@ -1801,6 +1963,11 @@ public sealed unsafe class VulkanRenderer : IDisposable
                 PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
                 PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
                 0, AccessFlags.ColorAttachmentWriteBit | AccessFlags.DepthStencilAttachmentWriteBit,
+                ImageAspectFlags.ColorBit),
+            new ImageTransition(depthColorTransient.Allocation.Image,
+                ImageLayout.Undefined, ImageLayout.ColorAttachmentOptimal,
+                PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.ColorAttachmentOutputBit,
+                0, AccessFlags.ColorAttachmentWriteBit,
                 ImageAspectFlags.ColorBit),
             new ImageTransition(depthTransient.Allocation.Image,
                 ImageLayout.Undefined, ImageLayout.DepthStencilAttachmentOptimal,
@@ -1852,10 +2019,16 @@ public sealed unsafe class VulkanRenderer : IDisposable
             _frameGraph.AddPass("capture-post",
                 cmd =>
                 {
-                    _post.Update(_currentFrame, colorTransient.View, _taaHistoryView, BuildPostParams(immediate: true));
+                    _post.Update(_currentFrame, colorTransient.View, _taaHistoryView, depthColorTransient.View,
+                        BuildPostParams(immediate: true));
                     _post.Record(cmd, _currentFrame, postFramebuffer, extent);
                 },
                 new ImageTransition(colorTransient.Allocation.Image,
+                    ImageLayout.ColorAttachmentOptimal, ImageLayout.ShaderReadOnlyOptimal,
+                    PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.FragmentShaderBit,
+                    AccessFlags.ColorAttachmentWriteBit, AccessFlags.ShaderReadBit,
+                    ImageAspectFlags.ColorBit),
+                new ImageTransition(depthColorTransient.Allocation.Image,
                     ImageLayout.ColorAttachmentOptimal, ImageLayout.ShaderReadOnlyOptimal,
                     PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.FragmentShaderBit,
                     AccessFlags.ColorAttachmentWriteBit, AccessFlags.ShaderReadBit,
@@ -1896,7 +2069,6 @@ public sealed unsafe class VulkanRenderer : IDisposable
 
         _frameGraph.Execute(commandBuffer);
         EndSingleTimeCommands(commandBuffer);
-
         if (hdrExr)
         {
             var halfPixels = new byte[(int)bufferSize];
@@ -1923,7 +2095,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         if (postFramebuffer.Handle != 0) _vk.DestroyFramebuffer(_device, postFramebuffer, null);
         readbackAllocation.Destroy(immediate: true);
         _allocator.CollectGarbage(0);
-        _camera.SetAspect(_swapchainExtent.Width, _swapchainExtent.Height);
+        _camera.SetAspect(_renderExtent.Width, _renderExtent.Height);
         _camera.SetJitter(savedJitterX, savedJitterY);
         _screenRefractionEnabled = savedScreenRefraction;
 
@@ -2011,7 +2183,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
             _camera.TwoPointPerspective = savedTwoPoint;
             _camera.AutoExposure = savedAutoExposure;
             _camera.Exposure = savedExposure;
-            _camera.SetAspect(_swapchainExtent.Width, _swapchainExtent.Height);
+            _camera.SetAspect(_renderExtent.Width, _renderExtent.Height);
             try { Directory.Delete(tempDir, true); } catch { }
         }
     }
@@ -2070,17 +2242,17 @@ public sealed unsafe class VulkanRenderer : IDisposable
         return output;
     }
 
-    private Framebuffer CreateCaptureFramebuffer(RenderPass renderPass, ImageView colorView, ImageView depthView,
-        uint width, uint height)
+    private Framebuffer CreateCaptureFramebuffer(RenderPass renderPass, ImageView colorView,
+        ImageView depthColorView, ImageView depthView, uint width, uint height)
     {
-        var attachments = new[] { colorView, depthView };
+        var attachments = new[] { colorView, depthColorView, depthView };
         fixed (ImageView* p = attachments)
         {
             var fbInfo = new FramebufferCreateInfo
             {
                 SType = StructureType.FramebufferCreateInfo,
                 RenderPass = renderPass,
-                AttachmentCount = 2,
+                AttachmentCount = 3,
                 PAttachments = p,
                 Width = width,
                 Height = height,
@@ -2170,6 +2342,12 @@ public sealed unsafe class VulkanRenderer : IDisposable
         _settings = settings.Clone();
         _whiteMode = _settings.WhiteBackground;
         _sunInfo = SunPosition.Compute(_sun, (float)_settings.SunPower);
+        float newScale = Math.Clamp((float)_settings.RenderScale, 0.5f, 1f);
+        if (MathF.Abs(newScale - _renderScale) > 1e-4f)
+        {
+            _renderScale = newScale;
+            _framebufferResized = true;
+        }
         _sky?.SetSkybox(
             _settings.SkyboxFromFile ? _settings.SkyboxFile : "",
             _settings);
@@ -2191,6 +2369,10 @@ public sealed unsafe class VulkanRenderer : IDisposable
 
         _swapchainState.Recreate(_pendingWidth, _pendingHeight);
         SwapchainRecreationCount++;
+        _renderScale = Math.Clamp((float)_settings.RenderScale, 0.5f, 1f);
+        _renderExtent = ComputeRenderExtent();
+        Write($"render scale: {_renderScale:0.##} -> {_renderExtent.Width}x{_renderExtent.Height} " +
+              $"(swapchain {_swapchainExtent.Width}x{_swapchainExtent.Height})");
         if (_postFormat != _swapchainFormat)
         {
             _post.Dispose();
@@ -2202,7 +2384,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         CreateFramebuffers();
         CreateRefractionResources();
         CreateTaaResources();
-        _camera.SetAspect(_swapchainExtent.Width, _swapchainExtent.Height);
+        _camera.SetAspect(_renderExtent.Width, _renderExtent.Height);
     }
 
     private void CleanupSwapchain()

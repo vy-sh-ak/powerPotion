@@ -15,6 +15,7 @@ layout(set = 0, binding = 0) uniform SceneUbo {
     vec4 cameraForward;
     vec4 sectionPlanes[8];
     vec4 sectionParams;
+    vec4 fogParams;
 } ubo;
 
 layout(push_constant) uniform Push {
