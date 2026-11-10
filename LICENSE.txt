@@ -1,0 +1,132 @@
+PowerPotion - Personal and Educational Use License
+==================================================
+
+Copyright (c) 2026 Vyshak T. All rights reserved.
+
+PowerPotion ("the Software") is a personalized, clean-room real-time renderer and companion
+add-in for Autodesk Revit. This file states the terms under which the Software may be used.
+By installing, copying, or using the Software you agree to these terms. If you do not agree,
+do not install or use the Software.
+
+
+1. GRANT OF USE
+---------------
+
+Subject to the restrictions in Section 2, you are granted a free, non-exclusive,
+non-transferable, revocable license to:
+
+  (a) install and run the Software on computers that you own or control, for your own
+      personal, non-commercial use, including hobby, study, portfolio, and demonstration use;
+
+  (b) use the Software for teaching, coursework, academic research, and other educational
+      purposes, provided no fee is charged for the Software itself; and
+
+  (c) read and study the source code in this repository for the purpose of learning.
+
+
+2. RESTRICTIONS
+---------------
+
+You may not:
+
+  (a) use the Software, in whole or in part, for any commercial purpose, including paid work,
+      client deliverables, production pipelines, consulting, or any activity intended to
+      generate revenue, without prior written permission from the copyright holder;
+
+  (b) sell, rent, lease, sublicense, distribute, publish, or otherwise make the Software
+      available to third parties, whether modified or unmodified, in source or binary form,
+      including uploading it to package registries, app stores, or software-sharing sites;
+
+  (c) charge a fee for the Software or bundle it with a paid product or service;
+
+  (d) remove, obscure, or alter this license, any copyright notice, or any branding,
+      attribution, or about-box text contained in the Software;
+
+  (e) use the name "PowerPotion", its logo, or the names of its contributors to endorse or
+      promote derived works without prior written permission; or
+
+  (f) claim authorship of the Software or present it as your own work.
+
+All rights not expressly granted in Section 1 are reserved by the copyright holder.
+
+
+3. THIRD-PARTY COMPONENTS
+-------------------------
+
+The Software depends on third-party components that are licensed separately by their own
+authors and are NOT covered by this license. Those licenses govern your use of those
+components and, where they conflict with this file, those licenses prevail for the components
+they cover. At the time of writing these include, without limitation:
+
+  * Silk.NET (Vulkan, Shaderc bindings) - MIT License
+  * Silk.NET.Shaderc.Native / shaderc - Apache License 2.0
+  * StbImageSharp / stb_image - public domain or MIT (dual)
+  * .NET runtime and Windows Desktop components - Microsoft license terms
+  * Autodesk Revit API assemblies - Autodesk license terms (see Section 4)
+
+The corresponding license texts are available from the respective upstream projects and in
+the NuGet packages restored into this repository.
+
+
+4. AUTODESK, REVIT, AND TRADEMARKS
+----------------------------------
+
+Autodesk and Revit are trademarks or registered trademarks of Autodesk, Inc. and/or its
+subsidiaries or affiliates. PowerPotion is an independent, unofficial project. It is not
+affiliated with, authorized by, sponsored by, endorsed by, or otherwise approved by Autodesk,
+Inc. Use of the Software requires a valid, licensed installation of Autodesk Revit; the
+Software does not grant you any rights to Revit, the Revit API, or Autodesk's trademarks.
+
+All other product names, logos, and marks are the property of their respective owners and are
+used only for identification purposes.
+
+
+5. CLEAN-ROOM STATEMENT
+-----------------------
+
+The behavior modeled by this project was studied from publicly documented APIs, publicly
+observable behavior, and static analysis notes retained for reference under `docs/`. All
+renderer code, shaders, and other implementation material in this repository were written
+independently for this project and are original works of the copyright holder. No third-party
+proprietary source code is included.
+
+
+6. NO WARRANTY
+--------------
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE,
+TITLE, AND NON-INFRINGEMENT. THE COPYRIGHT HOLDER DOES NOT WARRANT THAT THE SOFTWARE WILL BE
+ERROR-FREE, SECURE, OR UNINTERRUPTED, OR THAT IT WILL OPERATE WITH ANY PARTICULAR GPU, DRIVER,
+REVIT RELEASE, OR OPERATING SYSTEM VERSION.
+
+
+7. LIMITATION OF LIABILITY
+--------------------------
+
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL THE COPYRIGHT HOLDER BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR
+OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OF OR OTHER
+DEALINGS IN THE SOFTWARE. THIS INCLUDES, WITHOUT LIMITATION, LOSS OF DATA, LOSS OF PROJECT
+FILES, LOSS OF PROFITS, BUSINESS INTERRUPTION, OR DAMAGE TO HARDWARE. YOU ARE SOLELY
+RESPONSIBLE FOR BACKING UP YOUR REVIT MODELS AND FOR VERIFYING ANY OUTPUT BEFORE RELYING ON IT.
+
+
+8. TERMINATION
+--------------
+
+This license terminates automatically and immediately if you breach any of its terms. On
+termination you must stop using the Software and delete all copies in your possession. The
+copyright holder may also revoke the license at any time by publishing a revised license file
+in the project repository; continued use after a revision takes effect constitutes acceptance
+of the revised terms. Sections 2 through 7 survive termination.
+
+
+9. PERMISSIONS AND CONTACT
+--------------------------
+
+For commercial licensing, redistribution rights, or any use not covered above, request prior
+written permission from the copyright holder:
+
+  Vyshak T
+  vyshakunni791@gmail.com

@@ -14,10 +14,21 @@
     <ShaderSourceDir>$(MSBuildThisFileDirectory)Shaders</ShaderSourceDir>
     <ShaderOutputDir>$(ShaderSourceDir)\Compiled</ShaderOutputDir>
     <ShaderStamp>$(ShaderOutputDir)\.stamp</ShaderStamp>
+    <ShaderCompilerAssembly>$(MSBuildThisFileDirectory)..\..\tools\ShaderCompiler\bin\$(Configuration)\net8.0\ShaderCompiler.dll</ShaderCompilerAssembly>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\PowerPotion.Protocol\PowerPotion.Protocol.csproj" />
+    <!--
+      ShaderCompiler is a solution project, so it is already built by the solution build.
+      Reference it so MSBuild orders it before this project instead of letting the
+      CompileShaders target run a nested `dotnet run` build of the same project.
+    -->
+    <ProjectReference Include="..\..\tools\ShaderCompiler\ShaderCompiler.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false"
+                      SetConfiguration="Configuration=$(Configuration)"
+                      SetPlatform="Platform=AnyCPU" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,8 +48,8 @@
     committed so the renderer has no runtime shaderc dependency; the target refreshes them when
     a shader source changes.
   -->
-  <Target Name="CompileShaders" BeforeTargets="BeforeBuild" Inputs="@(ShaderSource)" Outputs="$(ShaderStamp)" Condition="'$(POWERPOTION_SKIP_SHADER_BUILD)' != '1'">
-    <Exec Command="dotnet run --project &quot;$(MSBuildThisFileDirectory)..\..\tools\ShaderCompiler\ShaderCompiler.csproj&quot; -c Release -- &quot;$(ShaderSourceDir)&quot; &quot;$(ShaderOutputDir)&quot;" WorkingDirectory="$(MSBuildThisFileDirectory)..\.." />
+  <Target Name="CompileShaders" BeforeTargets="PrepareResources" Inputs="@(ShaderSource)" Outputs="$(ShaderStamp)" Condition="'$(POWERPOTION_SKIP_SHADER_BUILD)' != '1'">
+    <Exec Command="dotnet &quot;$(ShaderCompilerAssembly)&quot; &quot;$(ShaderSourceDir)&quot; &quot;$(ShaderOutputDir)&quot;" WorkingDirectory="$(MSBuildThisFileDirectory)..\.." />
     <Touch Files="$(ShaderStamp)" AlwaysCreate="true" />
   </Target>
 </Project>
