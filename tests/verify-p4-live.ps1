@@ -39,5 +39,12 @@ foreach ($pair in $checks.GetEnumerator()) {
     Write-Host ("{0}: {1}" -f $state, $pair.Key)
 }
 
-if ($failed -gt 0) { throw "$failed live P4 check(s) failed." }
+if ($failed -gt 0) {
+    if (-not $checks["camera mode reported"]) {
+        Write-Host "HINT: in Revit, toggle View Control Bar -> Orthographic (or Two-Point Perspective),"
+        Write-Host "      then rerun this verifier. The initial perspective mode is only logged on a mode change"
+        Write-Host "      in the currently deployed add-in."
+    }
+    throw "$failed live P4 check(s) failed."
+}
 Write-Host "P4 LIVE PASSED: standalone renderer, camera mode, section planes and screen refraction are active."

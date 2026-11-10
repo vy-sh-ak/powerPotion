@@ -52,6 +52,7 @@ public sealed class LiveSyncService : IDisposable
     private string _lastSectionSignature = "";
     private bool _lastOrtho;
     private bool _lastTwoPoint;
+    private bool _cameraModeLogged;
     private readonly SemaphoreSlim _sendGate = new(1, 1);
     private ExternalEvent? _exportEvent;
     private bool _retryExportScheduled;
@@ -742,8 +743,11 @@ public sealed class LiveSyncService : IDisposable
                 AutoExposure = true,
                 TwoPointPerspective = twoPoint,
             };
-            if (camera.Ortho != _lastOrtho || camera.TwoPointPerspective != _lastTwoPoint)
+            if (!_cameraModeLogged ||
+                camera.Ortho != _lastOrtho ||
+                camera.TwoPointPerspective != _lastTwoPoint)
             {
+                _cameraModeLogged = true;
                 _lastOrtho = camera.Ortho;
                 _lastTwoPoint = camera.TwoPointPerspective;
                 LogLine($"camera mode: {(camera.Ortho ? "ortho" : camera.TwoPointPerspective ? "two-point" : "perspective")}");
