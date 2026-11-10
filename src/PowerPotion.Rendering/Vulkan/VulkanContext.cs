@@ -300,6 +300,7 @@ public sealed unsafe class VulkanContext : IDisposable
         var enabledFeatures = new PhysicalDeviceFeatures
         {
             SamplerAnisotropy = supportedFeatures.SamplerAnisotropy,
+            ShaderClipDistance = supportedFeatures.ShaderClipDistance,
         };
 
         try

@@ -16,12 +16,15 @@ public sealed unsafe class DescriptorManager : IDisposable
     private DescriptorSetLayout _uniformLayout;
     private DescriptorSetLayout _sceneLayout;
     private DescriptorSetLayout _bindlessLayout;
+    private DescriptorSetLayout _screenLayout;
     private DescriptorPool _pool;
     private DescriptorPool _scenePool;
     private DescriptorPool _bindlessPool;
+    private DescriptorPool _screenPool;
     private DescriptorSet[] _sets = Array.Empty<DescriptorSet>();
     private DescriptorSet[] _sceneSets = Array.Empty<DescriptorSet>();
     private DescriptorSet _bindlessSet;
+    private DescriptorSet _screenSet;
     private bool _disposed;
 
     public DescriptorManager(VulkanContext context, int frames)
@@ -35,9 +38,11 @@ public sealed unsafe class DescriptorManager : IDisposable
     public DescriptorSetLayout Layout => _uniformLayout;
     public DescriptorSetLayout SceneLayout => _sceneLayout;
     public DescriptorSetLayout BindlessLayout => _bindlessLayout;
+    public DescriptorSetLayout ScreenLayout => _screenLayout;
     public DescriptorSet[] Sets => _sets;
     public DescriptorSet[] SceneSets => _sceneSets;
     public DescriptorSet BindlessSet => _bindlessSet;
+    public DescriptorSet ScreenSet => _screenSet;
     public bool BindlessSupported => _context.SupportsBindless;
     public int TextureCapacityValue => TextureCapacity;
 
@@ -158,7 +163,28 @@ public sealed unsafe class DescriptorManager : IDisposable
                 throw new InvalidOperationException($"vkCreateDescriptorSetLayout (texture array) failed: {bindlessResult}");
         }
 
+        var screenBinding = new DescriptorSetLayoutBinding
+        {
+            Binding = 0,
+            DescriptorType = DescriptorType.CombinedImageSampler,
+            DescriptorCount = 1,
+            StageFlags = ShaderStageFlags.FragmentBit,
+        };
+
+        var screenInfo = new DescriptorSetLayoutCreateInfo
+        {
+            SType = StructureType.DescriptorSetLayoutCreateInfo,
+            BindingCount = 1,
+            PBindings = &screenBinding,
+        };
+
+        var screenResult = _context.Vk.CreateDescriptorSetLayout(
+            _context.Device, &screenInfo, null, out _screenLayout);
+        if (screenResult != Result.Success)
+            throw new InvalidOperationException($"vkCreateDescriptorSetLayout (screen) failed: {screenResult}");
+
         _context.SetObjectName(_bindlessLayout.Handle, ObjectType.DescriptorSetLayout, "bindless textures");
+        _context.SetObjectName(_screenLayout.Handle, ObjectType.DescriptorSetLayout, "screen colour");
     }
 
     private void CreatePools()
@@ -220,6 +246,22 @@ public sealed unsafe class DescriptorManager : IDisposable
         var bindlessResult = _context.Vk.CreateDescriptorPool(_context.Device, &bindlessInfo, null, out _bindlessPool);
         if (bindlessResult != Result.Success)
             throw new InvalidOperationException($"vkCreateDescriptorPool (bindless) failed: {bindlessResult}");
+
+        var screenSize = new DescriptorPoolSize
+        {
+            Type = DescriptorType.CombinedImageSampler,
+            DescriptorCount = 1,
+        };
+        var screenInfo = new DescriptorPoolCreateInfo
+        {
+            SType = StructureType.DescriptorPoolCreateInfo,
+            MaxSets = 1,
+            PoolSizeCount = 1,
+            PPoolSizes = &screenSize,
+        };
+        var screenResult = _context.Vk.CreateDescriptorPool(_context.Device, &screenInfo, null, out _screenPool);
+        if (screenResult != Result.Success)
+            throw new InvalidOperationException($"vkCreateDescriptorPool (screen) failed: {screenResult}");
     }
 
     public void CreateUniformSets(IReadOnlyList<BufferAllocation?> buffers)
@@ -394,6 +436,55 @@ public sealed unsafe class DescriptorManager : IDisposable
         }
     }
 
+    /// <summary>Allocates the single screen-colour set used by the transparent pass.</summary>
+    public void CreateScreenSet(ImageView view, Sampler sampler)
+    {
+        if (_screenSet.Handle != 0)
+        {
+            UpdateScreenSet(view, sampler);
+            return;
+        }
+
+        var layouts = new[] { _screenLayout };
+        fixed (DescriptorSetLayout* p = layouts)
+        {
+            var allocInfo = new DescriptorSetAllocateInfo
+            {
+                SType = StructureType.DescriptorSetAllocateInfo,
+                DescriptorPool = _screenPool,
+                DescriptorSetCount = 1,
+                PSetLayouts = p,
+            };
+
+            var result = _context.Vk.AllocateDescriptorSets(_context.Device, &allocInfo, out _screenSet);
+            if (result != Result.Success)
+                throw new InvalidOperationException($"vkAllocateDescriptorSets (screen) failed: {result}");
+        }
+        UpdateScreenSet(view, sampler);
+    }
+
+    public void UpdateScreenSet(ImageView view, Sampler sampler)
+    {
+        if (_screenSet.Handle == 0) return;
+        var imageInfo = new DescriptorImageInfo
+        {
+            ImageView = view,
+            Sampler = sampler,
+            ImageLayout = ImageLayout.ShaderReadOnlyOptimal,
+        };
+        var write = new WriteDescriptorSet
+        {
+            SType = StructureType.WriteDescriptorSet,
+            DstSet = _screenSet,
+            DstBinding = 0,
+            DstArrayElement = 0,
+            DescriptorCount = 1,
+            DescriptorType = DescriptorType.CombinedImageSampler,
+            PImageInfo = &imageInfo,
+        };
+        _context.Vk.UpdateDescriptorSets(_context.Device, 1, &write, 0, null);
+    }
+
     public void UpdateBindlessTexture(int index, ImageView view, Sampler sampler)
     {
         if (_bindlessSet.Handle == 0 || (uint)index >= TextureCapacity) return;
@@ -460,8 +551,10 @@ public sealed unsafe class DescriptorManager : IDisposable
         if (_pool.Handle != 0) vk.DestroyDescriptorPool(_context.Device, _pool, null);
         if (_scenePool.Handle != 0) vk.DestroyDescriptorPool(_context.Device, _scenePool, null);
         if (_bindlessPool.Handle != 0) vk.DestroyDescriptorPool(_context.Device, _bindlessPool, null);
+        if (_screenPool.Handle != 0) vk.DestroyDescriptorPool(_context.Device, _screenPool, null);
         if (_uniformLayout.Handle != 0) vk.DestroyDescriptorSetLayout(_context.Device, _uniformLayout, null);
         if (_sceneLayout.Handle != 0) vk.DestroyDescriptorSetLayout(_context.Device, _sceneLayout, null);
         if (_bindlessLayout.Handle != 0) vk.DestroyDescriptorSetLayout(_context.Device, _bindlessLayout, null);
+        if (_screenLayout.Handle != 0) vk.DestroyDescriptorSetLayout(_context.Device, _screenLayout, null);
     }
 }

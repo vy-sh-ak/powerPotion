@@ -20,6 +20,9 @@ public sealed unsafe class Swapchain : IDisposable
     private bool _vsync = true;
     private bool _disposed;
 
+    /// <summary>True when the surface supports copying the swapchain image into a sampled texture.</summary>
+    public bool SupportsTransferSrc { get; private set; }
+
     public Swapchain(VulkanContext context, bool vsync, bool hdr)
     {
         _context = context;
@@ -78,6 +81,7 @@ public sealed unsafe class Swapchain : IDisposable
 
         _presentMode = ChoosePresentMode(presentModes, _vsync);
         _extent = ChooseExtent(caps, width, height);
+        SupportsTransferSrc = (caps.SupportedUsageFlags & ImageUsageFlags.TransferSrcBit) != 0;
 
         var imageCount = caps.MinImageCount + 1;
         if (caps.MaxImageCount > 0 && imageCount > caps.MaxImageCount)
@@ -92,7 +96,8 @@ public sealed unsafe class Swapchain : IDisposable
             ImageColorSpace = _colorSpace,
             ImageExtent = _extent,
             ImageArrayLayers = 1,
-            ImageUsage = ImageUsageFlags.ColorAttachmentBit,
+            ImageUsage = ImageUsageFlags.ColorAttachmentBit |
+                         (SupportsTransferSrc ? ImageUsageFlags.TransferSrcBit : 0),
             PreTransform = caps.CurrentTransform,
             CompositeAlpha = CompositeAlphaFlagsKHR.OpaqueBitKhr,
             PresentMode = _presentMode,

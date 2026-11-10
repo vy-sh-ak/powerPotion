@@ -66,18 +66,34 @@ Renderer:
 `scene.frag`:
 
 - `isSolidGlass` (`FLAG_SOLID_GLASS`) and water (`MaterialType == 2`) get a Fresnel-weighted
-  environment reflection plus a refracted sky tint; solid glass also raises alpha towards the
-  silhouettes.
-- Water applies an animated ripple normal using the scene-UBO time.
+  environment reflection plus a **true screen-space refraction** sample: the opaque/sky colour
+  is copied to an offscreen image and sampled with a refraction offset.
+- Water applies an animated ripple normal using the scene-UBO time and uses the same screen
+  colour copy for its reflection/refraction blend.
 - Grass (`MaterialType == 1`) gets blade-scale albedo variation.
 - Alpha/cutout behaviour is unchanged.
+
+`VulkanRenderer`:
+
+- a second render pass (`_transparentRenderPass`, colour/depth `LoadOp.Load`) draws transparent
+  geometry after the opaque pass;
+- between the passes the swapchain colour is copied into `_refractionImage` and transitioned to
+  `ShaderReadOnlyOptimal`; the transparent pipeline samples it through descriptor set 2;
+- the screen-copy path is guarded by `VkSurfaceCapabilitiesKHR.supportedUsageFlags`
+  (`TRANSFER_SRC`); if unavailable the renderer falls back to environment refraction and logs it;
+- transparent draws are re-sorted far-to-near **per frame** using the current camera position
+  and model centres.
 
 `GpuScene`:
 
 - per-model bounds/centres are captured at upload;
-- solid glass and water are classified as transparent even when opacity is 1;
-- `VulkanRenderer` re-sorts transparent draws far-to-near **per frame** using the current camera
-  position and model centres.
+- solid glass and water are classified as transparent even when opacity is 1.
+
+### Section clipping in the shadow pass
+
+`shadow.vert` now reads the same scene UBO and writes `gl_ClipDistance[0..7]` from the active
+section planes, so clipped geometry no longer casts shadows. `shaderClipDistance` is enabled on
+the device, and the shadow pipeline binds the per-frame scene descriptor set.
 
 ## Evidence
 
@@ -86,10 +102,11 @@ Renderer:
 | Check | Result |
 |---|---|
 | Perspective baseline | captured, non-background 100% |
-| Solid glass pane | captured, image changed |
+| Solid glass pane | captured, image changed, screen-colour copy active |
 | Orthographic camera | captured, image changed, non-background 100% |
 | Two-point perspective | captured, image changed, non-background 100% |
 | Section plane `y >= 1 m` | captured, image changed, bottom-band RGB delta **16.4** |
+| Shadow pass | section clip distances bound to the scene UBO |
 | Validation | **0 errors / 0 warnings** |
 | Exit | `P4 PASSED: ortho, two-point, section planes and glass verified.` |
 
@@ -103,11 +120,8 @@ Captures:
 
 ## Limitations / follow-ups
 
-- Section clipping is applied to scene geometry; the sun shadow pass does not yet consume the
-  same planes, so clipped geometry can still contribute to the shadow map. A shadow-pass UBO
-  binding is a small follow-up.
-- Refraction currently samples the procedural environment rather than a screen-space colour
-  copy; the P5 post pipeline is the natural place to add the colour copy and true screen-space
-  refraction.
+- The screen-colour copy is a full-resolution copy of the swapchain; a half-resolution or
+  stencil-masked copy is a later optimisation.
 - Revit two-point perspective is detected from a vertical camera up axis
   (`|up.x|` and `|up.z|` below 1e-3); this matches the Revit two-point view convention.
+- Section planes are capped at 8 (protocol and shader array size).

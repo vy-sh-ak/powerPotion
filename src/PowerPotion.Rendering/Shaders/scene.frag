@@ -54,6 +54,7 @@ layout(set = 0, binding = 2) readonly buffer LightBuffer {
 layout(set = 0, binding = 3) uniform sampler2DArrayShadow sunShadow;
 
 layout(set = 1, binding = 0) uniform sampler2D textures[1024];
+layout(set = 2, binding = 0) uniform sampler2D screenColor;
 
 layout(push_constant) uniform Push {
     mat4 model;
@@ -73,6 +74,7 @@ const int FLAG_HAS_BUMP     = 1 << 6;
 const int FLAG_HAS_ROUGH    = 1 << 7;
 const int FLAG_HAS_MASK     = 1 << 8;
 const int WCS_SHIFT         = 16;
+const int PUSH_SCREEN_REFRACTION = 1 << 12;
 const float PI = 3.14159265359;
 
 vec2 applyTransform(vec4 r0, vec4 r1, vec4 r2, vec2 uv)
@@ -319,10 +321,10 @@ void main()
 
     color += m.emissive.rgb * max(m.emissive.w, 0.0);
 
-    // P4 glass/refraction: Fresnel-weighted environment reflection plus a refracted
-    // sky tint. (A true screen-space colour fetch arrives with the P5 post pipeline; this
-    // keeps the glass responsive without an extra scene copy.)
+    // P4 glass/refraction: Fresnel-weighted environment reflection plus, when the frame
+    // provides a scene-colour copy, a true screen-space refraction sample.
     bool solidGlass = (materialFlags & FLAG_SOLID_GLASS) != 0;
+    bool screenRefraction = (pc.flags & PUSH_SCREEN_REFRACTION) != 0;
     if (solidGlass || materialType == 2)
     {
         vec3 reflDir = reflect(-v, n);
@@ -334,11 +336,25 @@ void main()
         {
             vec3 refrDir = refract(-v, n, 1.0 / max(m.params2.x, 1.01));
             vec3 refrTint = albedo * (0.40 + 0.60 * clamp(refrDir.y * 0.5 + 0.5, 0.0, 1.0));
+            if (screenRefraction)
+            {
+                vec2 screenUv = gl_FragCoord.xy / vec2(textureSize(screenColor, 0));
+                vec2 offset = (refrDir.xy / max(abs(refrDir.z), 0.15)) * 0.045;
+                vec3 refracted = texture(screenColor, clamp(screenUv + offset, vec2(0.001), vec2(0.999))).rgb;
+                refrTint = mix(refrTint, refracted, 0.75);
+            }
             color = mix(color, mix(refrTint, skyRefl, clamp(0.18 + 0.82 * fres, 0.0, 1.0)), 0.80);
             alpha = max(alpha, mix(0.35, 0.95, fres));
         }
         else
         {
+            if (screenRefraction)
+            {
+                vec2 screenUv = gl_FragCoord.xy / vec2(textureSize(screenColor, 0));
+                vec2 offset = n.xz * 0.03;
+                vec3 refracted = texture(screenColor, clamp(screenUv + offset, vec2(0.001), vec2(0.999))).rgb;
+                color = mix(color, refracted, 0.35 + 0.35 * fres);
+            }
             color = mix(color, skyRefl, clamp(fres + 0.08, 0.0, 0.70));
             alpha = max(alpha, 0.72);
         }

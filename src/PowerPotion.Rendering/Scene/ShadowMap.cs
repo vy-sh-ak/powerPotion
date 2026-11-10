@@ -29,6 +29,7 @@ internal sealed unsafe class ShadowMap : IDisposable
     private readonly VulkanAllocator _allocator;
     private readonly PpPipelineCache _pipelines;
     private readonly uint _size;
+    private readonly DescriptorSetLayout _sceneLayout;
 
     private ImageAllocation? _image;
     private ImageView _arrayView;
@@ -40,12 +41,14 @@ internal sealed unsafe class ShadowMap : IDisposable
     private Sampler _sampler;
     private bool _disposed;
 
-    public ShadowMap(VulkanContext context, VulkanAllocator allocator, PpPipelineCache pipelines, uint size)
+    public ShadowMap(VulkanContext context, VulkanAllocator allocator, PpPipelineCache pipelines, uint size,
+        DescriptorSetLayout sceneLayout)
     {
         _context = context;
         _allocator = allocator;
         _pipelines = pipelines;
         _size = size;
+        _sceneLayout = sceneLayout;
         CreateResources();
     }
 
@@ -156,7 +159,7 @@ internal sealed unsafe class ShadowMap : IDisposable
             Offset = 0,
             Size = (uint)sizeof(ShadowPushConstants),
         };
-        _layout = _pipelines.CreateLayout(Array.Empty<DescriptorSetLayout>(), new[] { pushRange });
+        _layout = _pipelines.CreateLayout(new[] { _sceneLayout }, new[] { pushRange });
         CreatePipeline();
     }
 
@@ -381,7 +384,7 @@ internal sealed unsafe class ShadowMap : IDisposable
         }
     }
 
-    public void Render(CommandBuffer commandBuffer, GpuScene scene)
+    public void Render(CommandBuffer commandBuffer, GpuScene scene, DescriptorSet sceneSet)
     {
         for (int cascade = 0; cascade < CascadeCount; cascade++)
         {
@@ -404,6 +407,9 @@ internal sealed unsafe class ShadowMap : IDisposable
             };
             _context.Vk.CmdBeginRenderPass(commandBuffer, &rpInfo, SubpassContents.Inline);
             _context.Vk.CmdBindPipeline(commandBuffer, PipelineBindPoint.Graphics, _pipeline);
+
+            _context.Vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, _layout,
+                0, 1, &sceneSet, 0, null);
 
             var viewport = new Viewport
             {

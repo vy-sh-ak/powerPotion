@@ -55,6 +55,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
     private bool _whiteMode;
 
     private RenderPass _renderPass;
+    private RenderPass _transparentRenderPass;
     private PipelineLayout _pipelineLayout;
     private Pipeline _pipeline;
     private PipelineCache _pipelines = null!;
@@ -96,6 +97,14 @@ public sealed unsafe class VulkanRenderer : IDisposable
     private ShadowMap _shadowMap = null!;
     private Format _depthFormat;
     private Framebuffer[] _framebuffers = Array.Empty<Framebuffer>();
+    private Framebuffer[] _transparentFramebuffers = Array.Empty<Framebuffer>();
+
+    private ImageAllocation? _refractionImage;
+    private ImageView _refractionView;
+    private Sampler _refractionSampler;
+    private ImageLayout _refractionLayout = ImageLayout.Undefined;
+    private bool _screenRefractionEnabled;
+    private const int PushFlagScreenRefraction = 1 << 12;
 
     private CommandPool _commandPool;
     private readonly CommandBuffer[] _commandBuffers = new CommandBuffer[MaxFramesInFlight];
@@ -172,10 +181,11 @@ public sealed unsafe class VulkanRenderer : IDisposable
         _sky = new SkyRenderer(_context, _allocator, _pipelines, _renderPass);
         _sky.Log += Write;
         uint shadowSize = _settings.QualityLevel >= 3 ? 4096u : _settings.QualityLevel >= 2 ? 2048u : 1024u;
-        _shadowMap = new ShadowMap(_context, _allocator, _pipelines, shadowSize);
+        _shadowMap = new ShadowMap(_context, _allocator, _pipelines, shadowSize, _descriptors.SceneLayout);
         _shadowMap.Log += Write;
         CreateDepthResources();
         CreateFramebuffers();
+        CreateRefractionResources();
         CreateVertexBuffer();
         CreateIndexBuffer();
         CreateUniformBuffers();
@@ -201,12 +211,17 @@ public sealed unsafe class VulkanRenderer : IDisposable
     private void CreateRenderPass()
     {
         _depthFormat = ChooseDepthFormat();
+        _renderPass = BuildRenderPass(clear: true);
+        _transparentRenderPass = BuildRenderPass(clear: false);
+    }
 
+    private RenderPass BuildRenderPass(bool clear)
+    {
         var color = new AttachmentDescription
         {
             Format = _swapchainFormat,
             Samples = SampleCountFlags.Count1Bit,
-            LoadOp = AttachmentLoadOp.Clear,
+            LoadOp = clear ? AttachmentLoadOp.Clear : AttachmentLoadOp.Load,
             StoreOp = AttachmentStoreOp.Store,
             StencilLoadOp = AttachmentLoadOp.DontCare,
             StencilStoreOp = AttachmentStoreOp.DontCare,
@@ -218,7 +233,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         {
             Format = _depthFormat,
             Samples = SampleCountFlags.Count1Bit,
-            LoadOp = AttachmentLoadOp.Clear,
+            LoadOp = clear ? AttachmentLoadOp.Clear : AttachmentLoadOp.Load,
             StoreOp = AttachmentStoreOp.DontCare,
             StencilLoadOp = AttachmentLoadOp.DontCare,
             StencilStoreOp = AttachmentStoreOp.DontCare,
@@ -244,7 +259,9 @@ public sealed unsafe class VulkanRenderer : IDisposable
             DstSubpass = 0,
             SrcStageMask = PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
             DstStageMask = PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
-            SrcAccessMask = 0,
+            SrcAccessMask = clear
+                ? 0
+                : AccessFlags.ColorAttachmentWriteBit | AccessFlags.DepthStencilAttachmentWriteBit,
             DstAccessMask = AccessFlags.ColorAttachmentWriteBit | AccessFlags.DepthStencilAttachmentWriteBit,
         };
 
@@ -261,9 +278,10 @@ public sealed unsafe class VulkanRenderer : IDisposable
                 PDependencies = &dependency,
             };
 
-            var result = _vk.CreateRenderPass(_device, &info, null, out _renderPass);
+            var result = _vk.CreateRenderPass(_device, &info, null, out var renderPass);
             if (result != Result.Success)
                 throw new InvalidOperationException($"vkCreateRenderPass failed: {result}");
+            return renderPass;
         }
     }
 
@@ -487,27 +505,86 @@ public sealed unsafe class VulkanRenderer : IDisposable
     private void CreateFramebuffers()
     {
         _framebuffers = new Framebuffer[_swapchainImageViews.Length];
+        _transparentFramebuffers = new Framebuffer[_swapchainImageViews.Length];
         for (int i = 0; i < _swapchainImageViews.Length; i++)
         {
-            var attachments = new[] { _swapchainImageViews[i], _depthView };
-            fixed (ImageView* p = attachments)
-            {
-                var info = new FramebufferCreateInfo
-                {
-                    SType = StructureType.FramebufferCreateInfo,
-                    RenderPass = _renderPass,
-                    AttachmentCount = (uint)attachments.Length,
-                    PAttachments = p,
-                    Width = _swapchainExtent.Width,
-                    Height = _swapchainExtent.Height,
-                    Layers = 1,
-                };
-
-                var result = _vk.CreateFramebuffer(_device, &info, null, out _framebuffers[i]);
-                if (result != Result.Success)
-                    throw new InvalidOperationException($"vkCreateFramebuffer failed: {result}");
-            }
+            _framebuffers[i] = CreateFramebuffer(_renderPass, _swapchainImageViews[i]);
+            _transparentFramebuffers[i] = CreateFramebuffer(_transparentRenderPass, _swapchainImageViews[i]);
         }
+    }
+
+    private Framebuffer CreateFramebuffer(RenderPass renderPass, ImageView colorView)
+    {
+        var attachments = new[] { colorView, _depthView };
+        fixed (ImageView* p = attachments)
+        {
+            var info = new FramebufferCreateInfo
+            {
+                SType = StructureType.FramebufferCreateInfo,
+                RenderPass = renderPass,
+                AttachmentCount = (uint)attachments.Length,
+                PAttachments = p,
+                Width = _swapchainExtent.Width,
+                Height = _swapchainExtent.Height,
+                Layers = 1,
+            };
+
+            var result = _vk.CreateFramebuffer(_device, &info, null, out var framebuffer);
+            if (result != Result.Success)
+                throw new InvalidOperationException($"vkCreateFramebuffer failed: {result}");
+            return framebuffer;
+        }
+    }
+
+    private void CreateRefractionResources()
+    {
+        DestroyRefractionResources();
+        if (!_swapchainState.SupportsTransferSrc)
+        {
+            Write("screen refraction: swapchain does not support transfer source; using environment refraction");
+            return;
+        }
+
+        _refractionImage = _allocator.CreateImage(
+            _swapchainExtent.Width,
+            _swapchainExtent.Height,
+            _swapchainFormat,
+            ImageUsageFlags.SampledBit | ImageUsageFlags.TransferDstBit,
+            "scene colour copy");
+        _refractionView = CreateImageView(_refractionImage.Image, _swapchainFormat, ImageAspectFlags.ColorBit);
+
+        var samplerInfo = new SamplerCreateInfo
+        {
+            SType = StructureType.SamplerCreateInfo,
+            MagFilter = Filter.Linear,
+            MinFilter = Filter.Linear,
+            MipmapMode = SamplerMipmapMode.Nearest,
+            AddressModeU = SamplerAddressMode.ClampToEdge,
+            AddressModeV = SamplerAddressMode.ClampToEdge,
+            AddressModeW = SamplerAddressMode.ClampToEdge,
+            MinLod = 0f,
+            MaxLod = 0f,
+        };
+        var result = _vk.CreateSampler(_device, &samplerInfo, null, out _refractionSampler);
+        if (result != Result.Success)
+            throw new InvalidOperationException($"refraction vkCreateSampler failed: {result}");
+
+        _refractionLayout = ImageLayout.Undefined;
+        _descriptors.CreateScreenSet(_refractionView, _refractionSampler);
+        _screenRefractionEnabled = true;
+        Write($"screen refraction: enabled ({_swapchainExtent.Width}x{_swapchainExtent.Height} scene-colour copy)");
+    }
+
+    private void DestroyRefractionResources()
+    {
+        if (_refractionSampler.Handle != 0) _vk.DestroySampler(_device, _refractionSampler, null);
+        _refractionSampler = default;
+        if (_refractionView.Handle != 0) _vk.DestroyImageView(_device, _refractionView, null);
+        _refractionView = default;
+        _refractionImage?.Destroy(immediate: true);
+        _refractionImage = null;
+        _refractionLayout = ImageLayout.Undefined;
+        _screenRefractionEnabled = false;
     }
 
     private void CreateVertexBuffer()
@@ -624,7 +701,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
             };
 
             _scenePipelineLayout = _pipelines.CreateLayout(
-                new[] { _descriptors.SceneLayout, _descriptors.BindlessLayout },
+                new[] { _descriptors.SceneLayout, _descriptors.BindlessLayout, _descriptors.ScreenLayout },
                 new[] { pushRange });
 
             fixed (PipelineShaderStageCreateInfo* stagePtr = stages)
@@ -649,13 +726,16 @@ public sealed unsafe class VulkanRenderer : IDisposable
 
                 _sceneOpaquePipeline = CreateScenePipelineVariant(
                     stagePtr, (uint)stages.Length, &vertexInput, &inputAssembly,
-                    &viewportState, &multisample, &dynamic, cullNone: false, transparent: false);
+                    &viewportState, &multisample, &dynamic, cullNone: false, transparent: false,
+                    renderPass: _renderPass);
                 _sceneDoubleSidedPipeline = CreateScenePipelineVariant(
                     stagePtr, (uint)stages.Length, &vertexInput, &inputAssembly,
-                    &viewportState, &multisample, &dynamic, cullNone: true, transparent: false);
+                    &viewportState, &multisample, &dynamic, cullNone: true, transparent: false,
+                    renderPass: _renderPass);
                 _sceneTransparentPipeline = CreateScenePipelineVariant(
                     stagePtr, (uint)stages.Length, &vertexInput, &inputAssembly,
-                    &viewportState, &multisample, &dynamic, cullNone: true, transparent: true);
+                    &viewportState, &multisample, &dynamic, cullNone: true, transparent: true,
+                    renderPass: _transparentRenderPass);
             }
         }
         finally
@@ -671,7 +751,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         PipelineViewportStateCreateInfo* viewportState,
         PipelineMultisampleStateCreateInfo* multisample,
         PipelineDynamicStateCreateInfo* dynamicState,
-        bool cullNone, bool transparent)
+        bool cullNone, bool transparent, RenderPass renderPass)
     {
         var raster = new PipelineRasterizationStateCreateInfo
         {
@@ -730,7 +810,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
             PColorBlendState = &colorBlend,
             PDynamicState = dynamicState,
             Layout = _scenePipelineLayout,
-            RenderPass = _renderPass,
+            RenderPass = renderPass,
             Subpass = 0,
         };
 
@@ -1088,7 +1168,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
                        _sunInfo.Intensity > 0.01f;
         if (shadows)
         {
-            _frameGraph.AddPass("shadows", cmd => _shadowMap.Render(cmd, _scene!));
+            _frameGraph.AddPass("shadows", cmd => _shadowMap.Render(cmd, _scene!, _descriptors.SceneSets[_currentFrame]));
             _frameGraph.AddPass("shadow-read", _ => { },
                 new ImageTransition(_shadowMap.Image,
                     ImageLayout.DepthStencilAttachmentOptimal, ImageLayout.ShaderReadOnlyOptimal,
@@ -1111,6 +1191,15 @@ public sealed unsafe class VulkanRenderer : IDisposable
                 0, AccessFlags.DepthStencilAttachmentReadBit | AccessFlags.DepthStencilAttachmentWriteBit,
                 ImageAspectFlags.DepthBit));
 
+        if (_screenRefractionEnabled)
+        {
+            _frameGraph.AddPass("refraction-copy",
+                cmd => RecordRefractionCopy(cmd, _swapchainImages[imageIndex]));
+        }
+
+        _frameGraph.AddPass("transparent",
+            cmd => RecordTransparentPass(cmd, imageIndex));
+
         _frameGraph.AddPass("present",
             _ => { },
             new ImageTransition(_swapchainImages[imageIndex],
@@ -1123,11 +1212,15 @@ public sealed unsafe class VulkanRenderer : IDisposable
     }
 
     private void RecordOpaquePass(CommandBuffer commandBuffer, uint imageIndex) =>
-        RecordRenderPass(commandBuffer, _framebuffers[imageIndex], _swapchainExtent);
+        RecordRenderPass(commandBuffer, _framebuffers[imageIndex], _swapchainExtent, transparent: false);
 
-    private void RecordRenderPass(CommandBuffer commandBuffer, Framebuffer framebuffer, Extent2D extent)
+    private void RecordTransparentPass(CommandBuffer commandBuffer, uint imageIndex) =>
+        RecordRenderPass(commandBuffer, _transparentFramebuffers[imageIndex], _swapchainExtent, transparent: true);
+
+    private void RecordRenderPass(CommandBuffer commandBuffer, Framebuffer framebuffer, Extent2D extent,
+        bool transparent)
     {
-        _context.BeginLabel(commandBuffer, "opaque pass");
+        _context.BeginLabel(commandBuffer, transparent ? "transparent pass" : "opaque pass");
         var clearValues = new[]
         {
             new ClearValue { Color = new ClearColorValue { Float32_0 = 0.055f, Float32_1 = 0.043f, Float32_2 = 0.105f, Float32_3 = 1.0f } },
@@ -1139,34 +1232,111 @@ public sealed unsafe class VulkanRenderer : IDisposable
             var renderPassInfo = new RenderPassBeginInfo
             {
                 SType = StructureType.RenderPassBeginInfo,
-                RenderPass = _renderPass,
+                RenderPass = transparent ? _transparentRenderPass : _renderPass,
                 Framebuffer = framebuffer,
                 RenderArea = new Rect2D
                 {
                     Offset = new Offset2D { X = 0, Y = 0 },
                     Extent = extent,
                 },
-                ClearValueCount = (uint)clearValues.Length,
-                PClearValues = clearPtr,
+                ClearValueCount = transparent ? 0u : (uint)clearValues.Length,
+                PClearValues = transparent ? null : clearPtr,
             };
 
             _vk.CmdBeginRenderPass(commandBuffer, &renderPassInfo, SubpassContents.Inline);
         }
 
-        if (_scene is { HasGeometry: true })
+        if (!transparent && _scene is { HasGeometry: true })
             _sky.Record(commandBuffer, _currentFrame, extent);
 
-        BindScene(commandBuffer, _currentFrame);
+        BindScene(commandBuffer, _currentFrame, transparent);
         _vk.CmdEndRenderPass(commandBuffer);
         _context.EndLabel(commandBuffer);
     }
 
-    private void BindScene(CommandBuffer commandBuffer, int frame)
+    private void BindScene(CommandBuffer commandBuffer, int frame, bool transparentPass)
     {
         if (_scene is { HasGeometry: true })
-            RecordGpuScene(commandBuffer, frame);
-        else
+            RecordGpuScene(commandBuffer, frame, transparentPass);
+        else if (!transparentPass)
             BindCubeScene(commandBuffer, frame);
+    }
+
+    private void RecordRefractionCopy(CommandBuffer commandBuffer, Image sourceColor)
+    {
+        if (!_screenRefractionEnabled || _refractionImage == null) return;
+
+        var oldLayout = _refractionLayout;
+        var srcStage = oldLayout == ImageLayout.Undefined
+            ? PipelineStageFlags.TopOfPipeBit
+            : PipelineStageFlags.FragmentShaderBit;
+        var srcAccess = oldLayout == ImageLayout.Undefined ? 0 : AccessFlags.ShaderReadBit;
+
+        TransitionImage(commandBuffer, sourceColor,
+            ImageLayout.ColorAttachmentOptimal, ImageLayout.TransferSrcOptimal,
+            PipelineStageFlags.ColorAttachmentOutputBit, PipelineStageFlags.TransferBit,
+            AccessFlags.ColorAttachmentWriteBit, AccessFlags.TransferReadBit);
+        TransitionImage(commandBuffer, _refractionImage.Image,
+            oldLayout, ImageLayout.TransferDstOptimal,
+            srcStage, PipelineStageFlags.TransferBit,
+            srcAccess, AccessFlags.TransferWriteBit);
+
+        var copy = new ImageCopy
+        {
+            SrcSubresource = new ImageSubresourceLayers
+            {
+                AspectMask = ImageAspectFlags.ColorBit, MipLevel = 0, BaseArrayLayer = 0, LayerCount = 1,
+            },
+            DstSubresource = new ImageSubresourceLayers
+            {
+                AspectMask = ImageAspectFlags.ColorBit, MipLevel = 0, BaseArrayLayer = 0, LayerCount = 1,
+            },
+            SrcOffset = new Offset3D { X = 0, Y = 0, Z = 0 },
+            DstOffset = new Offset3D { X = 0, Y = 0, Z = 0 },
+            Extent = new Extent3D
+            {
+                Width = _swapchainExtent.Width, Height = _swapchainExtent.Height, Depth = 1,
+            },
+        };
+        _vk.CmdCopyImage(commandBuffer, sourceColor, ImageLayout.TransferSrcOptimal,
+            _refractionImage.Image, ImageLayout.TransferDstOptimal, 1, &copy);
+
+        TransitionImage(commandBuffer, sourceColor,
+            ImageLayout.TransferSrcOptimal, ImageLayout.ColorAttachmentOptimal,
+            PipelineStageFlags.TransferBit, PipelineStageFlags.ColorAttachmentOutputBit,
+            AccessFlags.TransferReadBit, AccessFlags.ColorAttachmentWriteBit);
+        TransitionImage(commandBuffer, _refractionImage.Image,
+            ImageLayout.TransferDstOptimal, ImageLayout.ShaderReadOnlyOptimal,
+            PipelineStageFlags.TransferBit, PipelineStageFlags.FragmentShaderBit,
+            AccessFlags.TransferWriteBit, AccessFlags.ShaderReadBit);
+        _refractionLayout = ImageLayout.ShaderReadOnlyOptimal;
+    }
+
+    private void TransitionImage(CommandBuffer commandBuffer, Image image,
+        ImageLayout oldLayout, ImageLayout newLayout,
+        PipelineStageFlags srcStage, PipelineStageFlags dstStage,
+        AccessFlags srcAccess, AccessFlags dstAccess)
+    {
+        var barrier = new ImageMemoryBarrier
+        {
+            SType = StructureType.ImageMemoryBarrier,
+            SrcAccessMask = srcAccess,
+            DstAccessMask = dstAccess,
+            OldLayout = oldLayout,
+            NewLayout = newLayout,
+            SrcQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
+            Image = image,
+            SubresourceRange = new ImageSubresourceRange
+            {
+                AspectMask = ImageAspectFlags.ColorBit,
+                BaseMipLevel = 0,
+                LevelCount = 1,
+                BaseArrayLayer = 0,
+                LayerCount = 1,
+            },
+        };
+        _vk.CmdPipelineBarrier(commandBuffer, srcStage, dstStage, 0, 0, null, 0, null, 1, &barrier);
     }
 
     private void BindCubeScene(CommandBuffer commandBuffer, int frame)
@@ -1203,7 +1373,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         _vk.CmdDrawIndexed(commandBuffer, (uint)CubeGeometry.Indices.Length, 1, 0, 0, 0);
     }
 
-    private void RecordGpuScene(CommandBuffer commandBuffer, int frame)
+    private void RecordGpuScene(CommandBuffer commandBuffer, int frame, bool transparentPass)
     {
         var viewport = new Viewport
         {
@@ -1225,16 +1395,24 @@ public sealed unsafe class VulkanRenderer : IDisposable
 
         var sceneSet = _descriptors.SceneSets[frame];
         var bindlessSet = _descriptors.BindlessSet;
+        var screenSet = _descriptors.ScreenSet;
         _vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, _scenePipelineLayout,
             0, 1, &sceneSet, 0, null);
         _vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, _scenePipelineLayout,
             1, 1, &bindlessSet, 0, null);
+        if (screenSet.Handle != 0)
+            _vk.CmdBindDescriptorSets(commandBuffer, PipelineBindPoint.Graphics, _scenePipelineLayout,
+                2, 1, &screenSet, 0, null);
 
         var draws = _scene!.Draws;
-        for (int i = 0; i < draws.Count; i++)
+        if (!transparentPass)
         {
-            if (!draws[i].Transparent)
-                DrawSceneItem(commandBuffer, draws[i]);
+            for (int i = 0; i < draws.Count; i++)
+            {
+                if (!draws[i].Transparent)
+                    DrawSceneItem(commandBuffer, draws[i], screenRefraction: false);
+            }
+            return;
         }
 
         // P4: transparent draws are sorted per frame by distance from the current camera.
@@ -1243,7 +1421,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
             .Where(d => d.Transparent)
             .OrderByDescending(d => DistanceSquared(d.Center, cameraPos));
         foreach (var draw in transparent)
-            DrawSceneItem(commandBuffer, draw);
+            DrawSceneItem(commandBuffer, draw, screenRefraction: _screenRefractionEnabled);
     }
 
     private static float DistanceSquared(Vec3 a, Vec3 b)
@@ -1252,7 +1430,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         return dx * dx + dy * dy + dz * dz;
     }
 
-    private void DrawSceneItem(CommandBuffer commandBuffer, SceneDraw draw)
+    private void DrawSceneItem(CommandBuffer commandBuffer, SceneDraw draw, bool screenRefraction)
     {
         var model = _scene!.Models[draw.ModelIndex];
         var pipeline = draw.Transparent
@@ -1270,7 +1448,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         {
             FrontMaterial = draw.FrontMaterial,
             BackMaterial = draw.BackMaterial,
-            Flags = 0,
+            Flags = screenRefraction ? PushFlagScreenRefraction : 0,
         };
         fixed (float* src = draw.Matrix)
             System.Buffer.MemoryCopy(src, &push, 64, 64);
@@ -1302,24 +1480,10 @@ public sealed unsafe class VulkanRenderer : IDisposable
         var depthTransient = _frameGraph.GetTransientImage("capture-depth", width, height, _depthFormat,
             ImageUsageFlags.DepthStencilAttachmentBit);
 
-        var attachments = new[] { colorTransient.View, depthTransient.View };
-        Framebuffer framebuffer;
-        fixed (ImageView* p = attachments)
-        {
-            var fbInfo = new FramebufferCreateInfo
-            {
-                SType = StructureType.FramebufferCreateInfo,
-                RenderPass = _renderPass,
-                AttachmentCount = 2,
-                PAttachments = p,
-                Width = width,
-                Height = height,
-                Layers = 1,
-            };
-            var fbResult = _vk.CreateFramebuffer(_device, &fbInfo, null, out framebuffer);
-            if (fbResult != Result.Success)
-                throw new InvalidOperationException($"capture vkCreateFramebuffer failed: {fbResult}");
-        }
+        Framebuffer opaqueFramebuffer = CreateCaptureFramebuffer(
+            _renderPass, colorTransient.View, depthTransient.View, width, height);
+        Framebuffer transparentFramebuffer = CreateCaptureFramebuffer(
+            _transparentRenderPass, colorTransient.View, depthTransient.View, width, height);
 
         ulong bufferSize = (ulong)width * height * 4;
         var readbackAllocation = _allocator.CreateBuffer(bufferSize, BufferUsageFlags.TransferDstBit,
@@ -1333,8 +1497,8 @@ public sealed unsafe class VulkanRenderer : IDisposable
         var extent = new Extent2D { Width = width, Height = height };
 
         _frameGraph.Reset();
-        _frameGraph.AddPass("capture",
-            cmd => RecordRenderPass(cmd, framebuffer, extent),
+        _frameGraph.AddPass("capture-opaque",
+            cmd => RecordRenderPass(cmd, opaqueFramebuffer, extent, transparent: false),
             new ImageTransition(colorTransient.Allocation.Image,
                 ImageLayout.Undefined, ImageLayout.ColorAttachmentOptimal,
                 PipelineStageFlags.ColorAttachmentOutputBit | PipelineStageFlags.EarlyFragmentTestsBit,
@@ -1347,6 +1511,15 @@ public sealed unsafe class VulkanRenderer : IDisposable
                 PipelineStageFlags.EarlyFragmentTestsBit | PipelineStageFlags.LateFragmentTestsBit,
                 0, AccessFlags.DepthStencilAttachmentReadBit | AccessFlags.DepthStencilAttachmentWriteBit,
                 ImageAspectFlags.DepthBit));
+
+        if (_screenRefractionEnabled)
+        {
+            _frameGraph.AddPass("capture-refraction",
+                cmd => RecordRefractionCopy(cmd, colorTransient.Allocation.Image));
+        }
+
+        _frameGraph.AddPass("capture-transparent",
+            cmd => RecordRenderPass(cmd, transparentFramebuffer, extent, transparent: true));
 
         _frameGraph.AddPass("capture-copy",
             cmd =>
@@ -1383,12 +1556,36 @@ public sealed unsafe class VulkanRenderer : IDisposable
 
         PngWriter.WriteBgra(path, (int)width, (int)height, pixels);
 
-        _vk.DestroyFramebuffer(_device, framebuffer, null);
+        _vk.DestroyFramebuffer(_device, opaqueFramebuffer, null);
+        _vk.DestroyFramebuffer(_device, transparentFramebuffer, null);
         readbackAllocation.Destroy(immediate: true);
         _allocator.CollectGarbage(0);
 
         Write($"Captured {width}x{height} to '{path}'.");
         return true;
+    }
+
+    private Framebuffer CreateCaptureFramebuffer(RenderPass renderPass, ImageView colorView, ImageView depthView,
+        uint width, uint height)
+    {
+        var attachments = new[] { colorView, depthView };
+        fixed (ImageView* p = attachments)
+        {
+            var fbInfo = new FramebufferCreateInfo
+            {
+                SType = StructureType.FramebufferCreateInfo,
+                RenderPass = renderPass,
+                AttachmentCount = 2,
+                PAttachments = p,
+                Width = width,
+                Height = height,
+                Layers = 1,
+            };
+            var fbResult = _vk.CreateFramebuffer(_device, &fbInfo, null, out var framebuffer);
+            if (fbResult != Result.Success)
+                throw new InvalidOperationException($"capture vkCreateFramebuffer failed: {fbResult}");
+            return framebuffer;
+        }
     }
 
     private CommandBuffer BeginSingleTimeCommands()
@@ -1491,6 +1688,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
         SwapchainRecreationCount++;
         CreateDepthResources();
         CreateFramebuffers();
+        CreateRefractionResources();
         _camera.SetAspect(_swapchainExtent.Width, _swapchainExtent.Height);
     }
 
@@ -1499,6 +1697,11 @@ public sealed unsafe class VulkanRenderer : IDisposable
         foreach (var framebuffer in _framebuffers)
             _vk.DestroyFramebuffer(_device, framebuffer, null);
         _framebuffers = Array.Empty<Framebuffer>();
+        foreach (var framebuffer in _transparentFramebuffers)
+            _vk.DestroyFramebuffer(_device, framebuffer, null);
+        _transparentFramebuffers = Array.Empty<Framebuffer>();
+
+        DestroyRefractionResources();
 
         if (_depthView.Handle != 0) _vk.DestroyImageView(_device, _depthView, null);
         _depthView = default;
@@ -1569,6 +1772,7 @@ public sealed unsafe class VulkanRenderer : IDisposable
                 _pipelines?.Dispose();
                 _descriptors?.Dispose();
                 if (_renderPass.Handle != 0) _vk.DestroyRenderPass(_device, _renderPass, null);
+                if (_transparentRenderPass.Handle != 0) _vk.DestroyRenderPass(_device, _transparentRenderPass, null);
 
                 for (int i = 0; i < MaxFramesInFlight; i++)
                     _uniformBuffers[i]?.Destroy(immediate: true);
